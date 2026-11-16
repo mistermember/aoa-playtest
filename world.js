@@ -10,6 +10,26 @@ let metadataPromise;
 export function resetWorldMemory(){memories.clear();}
 function loadImage(name){if(!imageCache.has(name)){imageCache.set(name,new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>{imageCache.delete(name);reject(new Error(`Could not load ${name}`));};i.src=`assets/${name}.webp`;}));}return imageCache.get(name);}
 function loadMetadata(){return metadataPromise??=fetch('assets/sprite-frames.json').then(r=>{if(!r.ok)throw Error('Sprite data unavailable');return r.json();}).catch(e=>{metadataPromise=null;throw e;});}
+function annotateFootPads(meta,atlases){
+ const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
+ for(const [name,image] of Object.entries(atlases)){
+  const pack=meta[name];if(!pack?.frames||!image)continue;
+  for(const frame of pack.frames){
+   const w=frame.w,h=frame.h;
+   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+   ctx.clearRect(0,0,w,h);
+   ctx.drawImage(image,frame.x,frame.y,w,h,0,0,w,h);
+   const data=ctx.getImageData(0,0,w,h).data,b=frame.bounds||{x:0,y:0,w,h};
+   let foot=-1;
+   for(let y=h-1;y>=0;y--){
+    for(let x=0;x<w;x++)if(data[(y*w+x)*4+3]>80){foot=y;break;}
+    if(foot>=0)break;
+   }
+   frame.footPad=foot<0?0:(b.y+b.h-1)-foot;
+  }
+ }
+}
+
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function rounded(ctx,x,y,w,h,r=5){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 function polygon(ctx,points){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();}
@@ -29,7 +49,7 @@ export class IsometricWorld {
  this.actors.forEach(a=>this.snap(a));separateCrowd(this.actors,this.grid,46);this.player.speed*=this.weather.speed;this.partyActors().forEach(a=>a.speed*=this.weather.speed);
  this.bind();this.resize();this.root.querySelector('[data-world="names"]')?.setAttribute('aria-pressed',String(this.showNames));
  this.headingTimer=setTimeout(()=>{if(!this.destroyed)this.root.querySelector('.world-heading')?.classList.add('is-compact');},3400);
- const leadAtlas=equipmentAtlas(state,state.lead);const brotherAtlas=this.companion?equipmentAtlas(state,this.companion.person):null;const need=[leadAtlas,'npc-walk'];if(brotherAtlas&&!need.includes(brotherAtlas))need.push(brotherAtlas);if(this.dog)need.push('pukie-walk');if(this.actors.some(a=>a.atlas==='npc-workers'))need.push('npc-workers');Promise.all([loadImage(this.scene.asset),loadMetadata(),...need.map(loadImage)]).then(async ([background,meta,...loaded])=>{if(this.destroyed)return;const atlases={};need.forEach((name,i)=>{atlases[name]=loaded[i];});const rigAtlases={};await Promise.all(need.map(async name=>{const rig=meta[name]?.rig;if(rig)rigAtlases[rig.asset]=await loadImage(rig.asset);}));if(this.destroyed)return;Object.assign(this,{background,hero:atlases[leadAtlas],npcs:atlases['npc-walk'],workers:atlases['npc-workers']||atlases['npc-walk'],rigAtlases,atlases,meta,ready:true});this.bakeOccluders();this.bakeMinimapGround();this.weatherTiles=new Map();root.querySelector('.world-loading')?.remove();this.cameraDirty=true;this.draw();this.wake();}).catch(()=>{if(!this.destroyed){const el=root.querySelector('.world-loading');if(el)el.textContent='Artwork could not load. Refresh to retry. Campaign actions below remain available.';}});
+ const leadAtlas=equipmentAtlas(state,state.lead);const brotherAtlas=this.companion?equipmentAtlas(state,this.companion.person):null;const need=[leadAtlas,'npc-walk'];if(brotherAtlas&&!need.includes(brotherAtlas))need.push(brotherAtlas);if(this.dog)need.push('pukie-walk');if(this.actors.some(a=>a.atlas==='npc-workers'))need.push('npc-workers');Promise.all([loadImage(this.scene.asset),loadMetadata(),...need.map(loadImage)]).then(async ([background,meta,...loaded])=>{if(this.destroyed)return;const atlases={};need.forEach((name,i)=>{atlases[name]=loaded[i];});const rigAtlases={};await Promise.all(need.map(async name=>{const rig=meta[name]?.rig;if(rig)rigAtlases[rig.asset]=await loadImage(rig.asset);}));if(this.destroyed)return;annotateFootPads(meta,atlases);Object.assign(this,{background,hero:atlases[leadAtlas],npcs:atlases['npc-walk'],workers:atlases['npc-workers']||atlases['npc-walk'],rigAtlases,atlases,meta,ready:true});this.bakeOccluders();this.bakeMinimapGround();this.weatherTiles=new Map();root.querySelector('.world-loading')?.remove();this.cameraDirty=true;this.draw();this.wake();}).catch(()=>{if(!this.destroyed){const el=root.querySelector('.world-loading');if(el)el.textContent='Artwork could not load. Refresh to retry. Campaign actions below remain available.';}});
  }
  createParty(){
  // The brother is the dog's guardian; Pukie never accepts player movement orders.
@@ -225,17 +245,39 @@ export class IsometricWorld {
  ctx.fillStyle='#716b52';ctx.beginPath();ctx.ellipse(x,y,14,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#7ca9a2';ctx.beginPath();ctx.ellipse(x,y-2,10,3.5,0,0,Math.PI*2);ctx.fill();
  ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.fillStyle='#e0d6ad';ctx.fillText('WAITING POINT',this.companion.x,this.companion.y+32);ctx.restore();
  }
+ drawGroundShadow(a){
+ const ctx=this.ctx,dog=!!a.dog,rx=dog?10:15.5,ry=dog?3.2:4.8,sx=dog?6:10,sy=dog?3.2:6;
+ // Scene sun is from the upper-left; building shadows fall down-right.
+ ctx.save();
+ ctx.fillStyle='rgba(7,9,7,.12)';
+ ctx.beginPath();ctx.ellipse(a.x+sx*.45,a.y+sy*.45,rx*1.55,ry*1.4,.28,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='rgba(6,8,6,.18)';
+ ctx.beginPath();ctx.ellipse(a.x+sx,a.y+sy,rx*1.12,ry*1.02,.32,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='rgba(5,7,5,.30)';
+ ctx.beginPath();ctx.ellipse(a.x+.8,a.y+.4,rx*1.08,ry*1.05,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='rgba(4,6,4,.50)';
+ ctx.beginPath();ctx.ellipse(a.x,a.y,rx*.82,ry*.8,0,0,Math.PI*2);ctx.fill();
+ ctx.restore();
+ }
+ drawSelectionMark(a){
+ const ctx=this.ctx,dog=!!a.dog;
+ ctx.save();
+ ctx.strokeStyle=a.enemy?'#e78e78':a.hero?'#d5e29e':a.party?'#91c5c0':(a.accent||'#edca7f');
+ ctx.lineWidth=1.1/this.scale;
+ ctx.beginPath();ctx.ellipse(a.x,a.y,dog?13:17.5,dog?4:5.4,0,0,Math.PI*2);ctx.stroke();
+ ctx.restore();
+ }
  drawActor(a){
  const ctx=this.ctx,pos=this.screenPoint(a);if(pos.x< -100||pos.x>this.width+100||pos.y< -120||pos.y>this.height+140)return;
- const selected=a.hero||a===this.hover||a===this.target?.actor||a.party||a.enemy;
- ctx.save();ctx.fillStyle='rgba(13,15,10,.36)';ctx.beginPath();ctx.ellipse(a.x,a.y+1,a.dog?11:17,a.dog?3:4.5,-.18,0,Math.PI*2);ctx.fill();
- if(selected||a.location){ctx.strokeStyle=a.enemy?'#e78e78':a.hero?'#d5e29e':a.party?'#91c5c0':(a.accent||'#edca7f');ctx.lineWidth=1.5/this.scale;ctx.beginPath();ctx.ellipse(a.x,a.y,a.dog?16:22,a.dog?6:9,0,0,Math.PI*2);ctx.stroke();}
+ this.drawGroundShadow(a);
+ if(a===this.hover||a===this.target?.actor||(a.enemy&&this.state.combat))this.drawSelectionMark(a);
  const gait=gaitPose(a,this.reduced),frame=gait.frame,atlas=a.atlas||(a.hero?equipmentAtlas(this.state,this.state.lead):'npc-walk'),directional=a.hero||a.party,row=directional?a.direction:(a.sprite??0),meta=this.meta[atlas]||this.meta[equipmentAtlas(this.state,this.state.lead)],rect=meta.frames[row*4+frame];
  const drawH=a.dog?40:a.hero||a.party?102:a.enemy?107:(a.stature||99),pose=spritePose(rect,drawH);
  const mirror=!directional&&(a.direction===0||a.direction===3);let ox=0,oy=0;
- if(!a.moving&&!this.reduced)oy+=Math.sin((this.time+(a.phase||0))*2.15)*0.8;
  if(this.combatFx){const f=this.combatFx;if(a.hero&&f.id==='attack'&&f.age<.38)ox=Math.sin(f.age/.38*Math.PI)*9;if(a.enemy&&f.id==='attack'&&f.age>.17&&f.age<.5&&f.hit>0)ox=Math.sin(f.age*40)*4;}
- ctx.translate(a.x+ox,a.y+oy);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);if(a.look)this.drawEquipment(a,pose);if(a.filter)ctx.filter='none';ctx.restore();
+ const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h;
+ ctx.save();
+ ctx.translate(a.x+ox,a.y+oy+footShift);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);if(a.look)this.drawEquipment(a,pose);if(a.filter)ctx.filter='none';ctx.restore();
  }
  drawRig(a,pose,gait,meta,row,frame){
  const ctx=this.ctx,rig=meta.rig,config=rig.rows[row],texture=this.rigAtlases[rig.asset],ref=meta.frames[config.reference],refPose=spritePose(ref,pose.height),bounds=ref.bounds;
