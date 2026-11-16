@@ -41,11 +41,22 @@ export function combatStaging(kind){
 export function makeActors(scene,state){
  const accents={venn:'#e6c78a',rusk:'#a5d8c7',merchant:'#d9a8d6',mara:'#91cdd7',engineer:'#e9ae79',foreman:'#b3bbda',halden:'#d4c397',sera:'#d9a8d6',father:'#d4d9c3',nalin:'#c5d4a8',kett:'#a5d8c7',brin:'#d9a8d6',orel:'#e9ae79',tess:'#a5d8c7',widow:'#d4c397',claimclerk:'#d4d9c3'};
  const workers={foreman:0,engineer:1,porter:2,father:3,clerk:3,farmer:2,waterworker:1,deckhand:2,technician:1};
- return scene.people.map((original,i)=>{
+ const actors=scene.people.map((original,i)=>{
  let p=original;
  if(p.location==='bank'&&!state.flags.bankAccess)p={...p,id:'bankofficer',name:'Repossession officer',sprite:1,tag:'VAULT ACCESS',barks:['Present the brass key. A claim is not an invitation.','Administrative review can be accelerated.']};
  if(p.location==='bank'&&state.flags.mara)p={...p,barks:['Training is cheaper than another trauma kit.','My courier route stays independent.']};
  if(p.location==='clearing'&&!state.flags.coreAccess)p={...p,id:'security',name:'Clearing security operator',sprite:1,tag:'SECURITY MANDATE',barks:['Three settlement keys. No exceptions without independent review.','The machine chamber is sealed.']};
- const weather=regionalWeather(state);if(['rain','dust'].includes(weather)&&p.route){const contacts=scene.people.filter(a=>a.location),anchor=contacts[i%contacts.length];p={...p,x:anchor.x+(i%2?32:-32),y:anchor.y+25,route:null,weatherShelter:true,barks:weather==='rain'?['Keep the crates under the awning.','The road can wait until this eases.']:['Cover the supplies. Dust gets into everything.','There is room beneath the shelter.']};}else if(weather==='fog'&&p.route)p={...p,barks:['Call when the next cart reaches the paving.','Stay where the others can hear you.']};
- return ({...p,atlas:workers[p.id]!==undefined?'npc-workers':'npc-walk',accent:accents[p.id]||'#acb9a0',stature:94+(i%4)*5,name:p.name,sprite:workers[p.id]??p.sprite,path:[],speed:46+i%3*6,direction:1,phase:i,moving:false,wait:3+i*1.4,routeIndex:0,bubble:null});});
+ const weather=regionalWeather(state);if(['rain','dust'].includes(weather)&&p.route){const contacts=scene.people.filter(a=>a.location),anchor=contacts[i%Math.max(1,contacts.length)]||p;const angle=(i*2.399)%(Math.PI*2),dist=62+(i%3)*16;p={...p,x:anchor.x+Math.cos(angle)*dist,y:anchor.y+Math.sin(angle)*dist,route:null,weatherShelter:true,barks:weather==='rain'?['Keep the crates under the awning.','The road can wait until this eases.']:['Cover the supplies. Dust gets into everything.','There is room beneath the shelter.']};}else if(weather==='fog'&&p.route)p={...p,barks:['Call when the next cart reaches the paving.','Stay where the others can hear you.']};
+ return ({...p,atlas:workers[p.id]!==undefined?'npc-workers':'npc-walk',accent:accents[p.id]||'#acb9a0',stature:94+(i%4)*5,name:p.name,sprite:workers[p.id]??p.sprite,path:[],speed:46+i%3*6,acceleration:150+i%3*20,direction:1,phase:i,moving:false,wait:3+i*1.4,routeIndex:0,bubble:null});});
+ const min=48;
+ for(let pass=0;pass<8;pass++){
+  for(let i=0;i<actors.length;i++){
+   for(let j=i+1;j<actors.length;j++){
+    const a=actors[i],b=actors[j];let dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy);
+    if(d<.01){dx=1;dy=(i-j)*.3;d=Math.hypot(dx,dy);}
+    if(d<min){const p=(min-d)/2,nx=dx/d,ny=dy/d;a.x+=nx*p;a.y+=ny*p;b.x-=nx*p;b.y-=ny*p;}
+   }
+  }
+ }
+ return actors;
 }

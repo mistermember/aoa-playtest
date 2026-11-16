@@ -25,14 +25,50 @@ export function approachPoint(grid,from,target,radius=62){
 export function stepActor(actor,dt){
  const elapsed=Math.min(.08,Math.max(0,dt));let speed=actor.speed;
  if(actor.acceleration){
- let remaining=Infinity;if((actor.path?.length||0)<=2){remaining=0;let x=actor.x,y=actor.y;for(const p of actor.path||[]){remaining+=Math.hypot(p.x-x,p.y-y);x=p.x;y=p.y;}}
- const target=actor.path?.length?Math.min(actor.speed,Math.sqrt(2*actor.acceleration*remaining)):0;
- const velocity=actor.velocity||0;actor.velocity=velocity+Math.sign(target-velocity)*Math.min(Math.abs(target-velocity),actor.acceleration*elapsed);speed=actor.velocity;
+  let remaining=0,x=actor.x,y=actor.y;
+  if(actor.holdVelocity)remaining=Infinity;
+  else for(const p of actor.path||[]){remaining+=Math.hypot(p.x-x,p.y-y);x=p.x;y=p.y;}
+  const cruise=actor.holdVelocity||remaining>36;
+  const target=(actor.path?.length||actor.holdVelocity)?Math.min(actor.speed,cruise?actor.speed:Math.sqrt(2*actor.acceleration*Math.max(remaining,.01))):0;
+  const velocity=actor.velocity||0;
+  actor.velocity=velocity+Math.sign(target-velocity)*Math.min(Math.abs(target-velocity),actor.acceleration*elapsed);
+  speed=actor.velocity;
  }
  let budget=speed*elapsed,moved=0;
- while(budget>0&&actor.path?.length){const target=actor.path[0],dx=target.x-actor.x,dy=target.y-actor.y,d=Math.hypot(dx,dy);if(d<.01){actor.path.shift();continue;}actor.direction=dy>=0?(dx>=0?0:1):(dx<0?2:3);actor.heading={x:dx/d,y:dy/d};const step=Math.min(budget,d);actor.x+=dx/d*step;actor.y+=dy/d*step;budget-=step;moved+=step;if(step>=d-.001)actor.path.shift();}
- actor.moving=moved>.01;if(actor.moving)actor.phase=(actor.phase||0)+moved/15;
- if(!actor.path?.length)actor.velocity=0;
+ while(budget>0&&actor.path?.length){
+  const target=actor.path[0],dx=target.x-actor.x,dy=target.y-actor.y,d=Math.hypot(dx,dy);
+  if(d<.01){actor.path.shift();continue;}
+  const facing=dy>=0?(dx>=0?0:1):(dx<0?2:3);
+  if(facing!==actor.direction){
+   actor.faceTimer=(actor.faceTimer||0)+elapsed;
+   if(actor.faceTimer>.08||!actor.moving)actor.direction=facing;
+  }else actor.faceTimer=0;
+  actor.heading={x:dx/d,y:dy/d};
+  const step=Math.min(budget,d);actor.x+=dx/d*step;actor.y+=dy/d*step;budget-=step;moved+=step;
+  if(step>=d-.001)actor.path.shift();
+ }
+ actor.moving=moved>.01;
+ if(actor.moving)actor.phase=(actor.phase||0)+moved/(actor.dog?10:18);
+ if(!actor.path?.length&&!actor.holdVelocity){
+  if(actor.acceleration&&actor.velocity){actor.velocity=Math.max(0,actor.velocity-actor.acceleration*elapsed);if(actor.velocity<4)actor.velocity=0;}
+  else actor.velocity=0;
+ }
  return moved;
 }
 export function resolveSeparation(actor,others,grid,radius=17){for(const other of others){if(actor===other)continue;const d=distance(actor,other);if(d>0.01&&d<radius){const push=(radius-d)*.45,nx=actor.x+(actor.x-other.x)/d*push,ny=actor.y+(actor.y-other.y)/d*push;if(isWalkable(grid,nx,ny)){actor.x=nx;actor.y=ny;}}}}
+export function separateCrowd(list,grid,radius=46){
+ for(let pass=0;pass<10;pass++){
+  for(let i=0;i<list.length;i++){
+   for(let j=i+1;j<list.length;j++){
+    const a=list[i],b=list[j];let dx=a.x-b.x,dy=a.y-b.y,d=Math.hypot(dx,dy);
+    if(d<.01){dx=1;dy=(i-j)*.2;d=Math.hypot(dx,dy);}
+    if(d<radius){
+     const push=(radius-d)/2,nx=dx/d,ny=dy/d;
+     const ax=a.x+nx*push,ay=a.y+ny*push,bx=b.x-nx*push,by=b.y-ny*push;
+     if(!grid||isWalkable(grid,ax,ay)){a.x=ax;a.y=ay;}
+     if(!grid||isWalkable(grid,bx,by)){b.x=bx;b.y=by;}
+    }
+   }
+  }
+ }
+}
