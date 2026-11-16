@@ -38,6 +38,33 @@ export function combatStaging(kind){
  if(kind==='convoy')return {player:{x:720,y:700,direction:3},enemy:{x:878,y:610},companion:{x:560,y:760},dog:{x:520,y:790},camera:{x:760,y:650,zoom:1.18}};
  return {player:{x:620,y:747,direction:3},enemy:{x:920,y:521},companion:{x:365,y:770},dog:{x:405,y:800},camera:{x:768,y:617,zoom:1.18}};
 }
+function distinctLooks(actors){
+ const key=a=>`${a.atlas}|${a.sprite||0}`;
+ const taken=new Set();
+ const tints=['hue-rotate(22deg) saturate(0.92)','hue-rotate(-24deg) saturate(0.92)','hue-rotate(18deg) saturate(0.88)','hue-rotate(-18deg) saturate(0.9)'];
+ const pools={'npc-walk':[0,1,2,3],'npc-workers':[0,1,2,3]};
+ const order=[...actors.filter(a=>a.location),...actors.filter(a=>!a.location)];
+ for(const a of order){
+  a.sprite=a.sprite??0;
+  const k=key(a);
+  if(!taken.has(k)){taken.add(k);continue;}
+  let found=false;
+  for(const at of [a.atlas, a.atlas==='npc-walk'?'npc-workers':'npc-walk']){
+   for(const row of pools[at]||[]){
+    const kk=`${at}|${row}`;
+    if(!taken.has(kk)){a.atlas=at;a.sprite=row;taken.add(kk);found=true;break;}
+   }
+   if(found)break;
+  }
+  if(!found){
+   if(!a.location){a.drop=true;continue;}
+   const tint=tints.find(tn=>!taken.has(k+'|'+tn))||tints[0];
+   a.filter=tint;
+   taken.add(k+'|'+tint);
+  }
+ }
+ return actors.filter(a=>!a.drop);
+}
 export function makeActors(scene,state){
  const accents={venn:'#e6c78a',rusk:'#a5d8c7',merchant:'#d9a8d6',mara:'#91cdd7',engineer:'#e9ae79',foreman:'#b3bbda',halden:'#d4c397',sera:'#d9a8d6',father:'#d4d9c3',nalin:'#c5d4a8',kett:'#a5d8c7',brin:'#d9a8d6',orel:'#e9ae79',tess:'#a5d8c7',widow:'#d4c397',claimclerk:'#d4d9c3'};
  const workers={foreman:0,engineer:1,porter:2,father:3,clerk:3,farmer:2,waterworker:1,deckhand:2,technician:1};
@@ -58,5 +85,5 @@ export function makeActors(scene,state){
    }
   }
  }
- return actors;
+ return distinctLooks(actors);
 }

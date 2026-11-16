@@ -28,7 +28,16 @@ export function validEquipment(gear){
  return true;
 }
 export function equipmentStats(s){const g=s.gear[s.lead],w=WEAPONS[g.weapon],o=OUTFITS[g.outfit];return {weapon:w,outfit:o,accuracy:w.accuracy+o.accuracy,damage:w.damage,armor:o.armor,magazine:w.magazine};}
-export function equipmentAtlas(s,id){return id+(s.gear?.[id]?.outfit==='rain'?(id==='berkay'&&hoodRaised(s,id)?'-rain-hood-walk':'-rain-walk'):'-walk');}
+export function equipmentAtlas(s,id){
+ if(id==='berkay'){
+  const g=s?.gear?.berkay||defaultEquipment().berkay;
+  if(s&&hoodRaised(s,id))return 'berkay-rain-hood-walk';
+  const rain=g.outfit==='rain';
+  if(g.hat)return rain?(g.glasses?'berkay-rain-hat-glasses-walk':'berkay-rain-hat-walk'):(g.glasses?'berkay-hat-glasses-walk':'berkay-hat-walk');
+  return rain?'berkay-rain-walk':'berkay-walk';
+ }
+ return id+(s.gear?.[id]?.outfit==='rain'?'-rain-walk':'-walk');
+}
 export function equipmentPortrait(s,id){if(id!=='berkay')return id+'-portrait';const g=s?.gear?.berkay||defaultEquipment().berkay;if(s&&hoodRaised(s,id))return 'berkay-style-'+(g.glasses?5:4);return 'berkay-style-'+((g.hat?1:0)+(g.glasses?2:0));}
 export function canEquip(s,id){return !s.ending&&!s.combat&&(id===s.lead||s.party.mode==='follow'||s.party.waitingAt===s.location);}
 

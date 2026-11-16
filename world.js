@@ -235,7 +235,7 @@ export class IsometricWorld {
  const mirror=!directional&&(a.direction===0||a.direction===3);let ox=0,oy=0;
  if(!a.moving&&!this.reduced)oy+=Math.sin((this.time+(a.phase||0))*2.15)*0.8;
  if(this.combatFx){const f=this.combatFx;if(a.hero&&f.id==='attack'&&f.age<.38)ox=Math.sin(f.age/.38*Math.PI)*9;if(a.enemy&&f.id==='attack'&&f.age>.17&&f.age<.5&&f.hit>0)ox=Math.sin(f.age*40)*4;}
- ctx.translate(a.x+ox,a.y+oy);if(mirror)ctx.scale(-1,1);const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);if(a.look)this.drawEquipment(a,pose);ctx.restore();
+ ctx.translate(a.x+ox,a.y+oy);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);if(a.look)this.drawEquipment(a,pose);if(a.filter)ctx.filter='none';ctx.restore();
  }
  drawRig(a,pose,gait,meta,row,frame){
  const ctx=this.ctx,rig=meta.rig,config=rig.rows[row],texture=this.rigAtlases[rig.asset],ref=meta.frames[config.reference],refPose=spritePose(ref,pose.height),bounds=ref.bounds;
@@ -254,7 +254,7 @@ export class IsometricWorld {
  const ctx=this.ctx,g=a.look,front=a.direction<2,side=a.direction===0||a.direction===3?1:-1;
  const crown=pose.crown,face=pose.face,hip=pose.hip;
  const hw=Math.max(11,pose.headWidth);
- if(g.hat&&!hoodRaised(this.state,a.person)){
+ if(a.person!=='berkay'&&g.hat&&!hoodRaised(this.state,a.person)){
   const cx=crown.x,cy=crown.y+hw*.18,rx=hw*.58,ry=hw*.34;
   ctx.fillStyle='#6e6250';ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,Math.PI,Math.PI*2);ctx.closePath();ctx.fill();
   ctx.fillStyle='#7d6e58';ctx.beginPath();ctx.ellipse(cx,cy+ry*.12,rx*1.02,ry*.82,0,0,Math.PI*2);ctx.fill();
@@ -268,7 +268,7 @@ export class IsometricWorld {
   }
   ctx.strokeStyle='#5a4f3f';ctx.lineWidth=.65;ctx.beginPath();ctx.moveTo(cx,cy-ry);ctx.lineTo(cx,cy+ry*.15);ctx.stroke();
  }
- if(g.glasses&&front){
+ if(a.person!=='berkay'&&g.glasses&&front){
   const x=face.x+side*.6,y=face.y+.3,lw=Math.max(3.5,hw*.22),lh=Math.max(2.3,hw*.13);
   ctx.fillStyle='#14120f';
   ctx.beginPath();ctx.ellipse(x-lw*.7,y,lw*.48,lh*.7,side*.1,0,Math.PI*2);ctx.fill();
@@ -276,7 +276,7 @@ export class IsometricWorld {
   ctx.strokeStyle='#2a2722';ctx.lineWidth=.75;ctx.beginPath();ctx.moveTo(x-lw*.2,y);ctx.lineTo(x+lw*.2,y);ctx.stroke();
   ctx.fillStyle='rgba(220,220,230,.2)';ctx.beginPath();ctx.ellipse(x-lw*.82,y-lh*.2,lw*.16,lh*.12,0,0,Math.PI*2);ctx.fill();
  }
- if(a.person==='berkay'&&front&&!(a.atlas||'').includes('rain')){
+ if(false&&a.person==='berkay'&&front&&!(a.atlas||'').includes('rain')){
   const x=face.x+side*hw*.2,y=face.y+hw*.26;
   ctx.fillStyle='#f0eee6';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+side*2.4,y+.8);ctx.lineTo(x+side*4.4,y+4.4);ctx.lineTo(x+side*1.6,y+2.6);ctx.closePath();ctx.fill();
   ctx.fillStyle='#2a8eb0';ctx.beginPath();ctx.ellipse(x+side*2.2,y+2.2,.7,1,side*-.4,0,Math.PI*2);ctx.fill();
