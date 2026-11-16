@@ -131,11 +131,11 @@ export class IsometricWorld {
  if(this.target&&!this.player.path.length){const {actor,callback}=this.target;this.target=null;this.destination=null;this.setStatus('');this.faceEachOther(this.player,actor);if(distance(this.player,actor)<=115){if(callback)callback();else this.callbacks.interact(actor);if(this.destroyed)return;}}
  if(!this.reduced&&!this.economy){
  this.updateSocial(dt);
- for(const a of this.actors){if(a===this.target?.actor||this.social&&(a===this.social.a||a===this.social.b))continue;a.wait-=dt;if(a.route&&!a.path.length&&a.wait<=0){const p=a.route[a.routeIndex++%a.route.length];a.path=findPath(this.grid,a,{x:p[0],y:p[1]},70)||[];a.wait=4+(a.routeIndex%4)*2;}stepActor(a,dt);resolveSeparation(a,[this.player,...this.actors],this.grid,20);}
+ for(const a of this.actors){if(a===this.target?.actor||this.social&&(a===this.social.a||a===this.social.b))continue;a.wait-=dt;if(a.route&&!a.path.length&&a.wait<=0){const p=a.route[a.routeIndex++%a.route.length];a.path=findPath(this.grid,a,{x:p[0],y:p[1]},70)||[];a.wait=2.4+((a.routeIndex*5+(a.name||'').length+(a.sprite||0))%8)*.85;}stepActor(a,dt);resolveSeparation(a,[this.player,...this.actors],this.grid,20);}
  }
  if(this.companion)this.updateFollower(this.companion,this.player,dt,65);
  if(this.dog)this.updateFollower(this.dog,this.companion,dt,38);
- if(this.follow&&!this.drag){const targetX=this.player.x,targetY=this.player.y-85;if(Math.abs(targetX-this.camera.x)>2||Math.abs(targetY-this.camera.y)>2){const beforeX=this.camera.x,beforeY=this.camera.y;this.camera.x+=(targetX-this.camera.x)*Math.min(1,dt*4);this.camera.y+=(targetY-this.camera.y)*Math.min(1,dt*4);this.clampCamera();const slack=.75/Math.max(this.scale,0.5);if(Math.abs(beforeX-this.camera.x)>slack||Math.abs(beforeY-this.camera.y)>slack)this.cameraDirty=true;}}
+ if(this.follow&&!this.drag){const targetX=this.player.x,targetY=this.player.y-85,dx=targetX-this.camera.x,dy=targetY-this.camera.y;const deadX=Math.max(48,(this.width/this.scale)*0.20),deadY=Math.max(36,(this.height/this.scale)*0.16);let mx=0,my=0;if(Math.abs(dx)>deadX)mx=dx-Math.sign(dx)*deadX;if(Math.abs(dy)>deadY)my=dy-Math.sign(dy)*deadY;if(mx||my){this.camera.x+=mx*Math.min(1,dt*4);this.camera.y+=my*Math.min(1,dt*4);this.clampCamera();this.cameraDirty=true;}}
  }
  updateSocial(dt){
  const ambient=this.actors.filter(a=>a.route);
@@ -216,7 +216,7 @@ export class IsometricWorld {
  const drawH=a.dog?40:a.hero||a.party?102:a.enemy?107:(a.stature||99),pose=spritePose(rect,drawH);
  const mirror=!directional&&(a.direction===0||a.direction===3);let ox=0,oy=0;
  if(this.combatFx){const f=this.combatFx;if(a.hero&&f.id==='attack'&&f.age<.38)ox=Math.sin(f.age/.38*Math.PI)*9;if(a.enemy&&f.id==='attack'&&f.age>.17&&f.age<.5&&f.hit>0)ox=Math.sin(f.age*40)*4;}
- ctx.translate(a.x+ox,a.y+oy-gait.lift);if(mirror)ctx.scale(-1,1);ctx.rotate(gait.sway);const source=pose.source;if(meta.rig&&this.rigAtlases?.[meta.rig.asset])this.drawRig(a,pose,gait,meta,row,frame);else ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);if(a.look)this.drawEquipment(a,pose);ctx.restore();
+ ctx.translate(a.x+ox,a.y+oy);if(mirror)ctx.scale(-1,1);const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);if(a.look)this.drawEquipment(a,pose);ctx.restore();
  }
  drawRig(a,pose,gait,meta,row,frame){
  const ctx=this.ctx,rig=meta.rig,config=rig.rows[row],texture=this.rigAtlases[rig.asset],ref=meta.frames[config.reference],refPose=spritePose(ref,pose.height),bounds=ref.bounds;
