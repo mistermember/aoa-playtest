@@ -1,0 +1,28 @@
+Age of Abundance v4 — art notes
+================================
+
+v4 now includes generated plates for the three gaps listed in the
+original brief. They match the existing isometric camera, lighting and
+palette as closely as an image model could, using the v3 maps as
+references, then cropped to 1536×1024 WebP. Uygar can still replace
+any of them with hand-painted art later; the walkable polygons and
+combat staging below are fitted to the current plates.
+
+1. Interior district map — assets/interior-map.webp
+   Used by The Directorate and Paper Harvest (directorate / granary).
+   Walkable polygon and NPC positions are the same layout as the old
+   town-map stand-in, which still fits this courtyard.
+
+2. Ruined Bank / vault fight arena — assets/vault-map.webp
+   Used only for the bank repossession fight (combat scene "vault").
+   Exploration of the bank still happens on the Par Value town map.
+
+3. Core duel plate — assets/core-duel-map.webp
+   Used only for the sentinel / Core fight (combat scene "coreduel").
+   Exploration of Central Clearing still uses core-map.webp, which was
+   already the correct location.
+
+Optional later:
+- Unique clinic/ward interiors (currently outdoor plates with “sheltered” weather).
+- Distinct location-card stills for sites that reuse par-value / exchange / reserve / clearing crops.
+- Hand-painted replacements of the three generated plates, if desired.
