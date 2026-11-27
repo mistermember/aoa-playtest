@@ -714,3 +714,45 @@ body.large-text .resource.deadline strong{font-size:18px!important}
  .header-tools{gap:4px}
  .save-button{padding:8px 9px;min-width:44px}
 }
+
+/* v5.0.8 E2E: role cards show the full skill row; larger-text nav */
+.role-card{
+ overflow:visible!important;
+ height:auto!important;
+ min-height:min-content!important;
+ padding-bottom:20px!important;
+ display:flex;
+ flex-direction:column;
+ align-items:stretch;
+ box-sizing:border-box;
+}
+.role-card p{flex:1 1 auto;min-height:0;}
+.role-card>.role-skills,
+.role-card>div{
+ flex:0 0 auto!important;
+ display:flex;
+ flex-wrap:wrap;
+ overflow:visible!important;
+ margin-top:16px!important;
+ margin-bottom:2px;
+ padding-bottom:4px;
+ min-height:auto!important;
+}
+.role-card .role-select{
+ flex:0 0 auto!important;
+ margin-top:14px!important;
+ position:relative;
+ overflow:visible;
+}
+@media(max-width:700px){
+ .role-card{padding:18px 16px 22px!important;}
+ .role-card>.role-skills,
+ .role-card>div{flex-wrap:wrap;gap:10px 16px!important;}
+}
+body.large-text .main-nav{min-height:56px;}
+body.large-text .nav-tabs button{font-size:16px!important;gap:8px;}
+body.large-text .nav-tabs button .icon{width:20px;height:20px;}
+body.large-text .nav-full,
+body.large-text .nav-short{font-size:16px!important;}
+body.large-text .turn-tag{font-size:12px!important;}
+body.large-text.android-native .nav-tabs button{font-size:15px!important;}

@@ -1,9 +1,14 @@
 // Pose calculations use travelled distance, never wall-clock animation timers.
 export function gaitPose(actor,reduced=false){
  const cycle=(((actor.phase||0)%4)+4)%4/4;
- const frame=!actor.moving?0:Math.floor(cycle*4)%4;
- const lift=actor.moving&&!reduced?(actor.dog?.55:.85)*(1-Math.cos(cycle*4*Math.PI))*.5:0;
- return {frame,cycle,lift,sway:actor.moving&&!reduced?Math.sin(cycle*2*Math.PI)*.008:0};
+ const speed=actor.velocity||0;
+ const planted=actor.planted??(!actor.moving||speed<8);
+ const frame=planted?0:Math.floor(cycle*4)%4;
+ if(planted||reduced)return {frame:0,cycle,lift:0,sway:0,lean:0,planted:true};
+ const lift=Math.abs(Math.sin(cycle*2*Math.PI))*(actor.dog?.35:.85);
+ const sway=Math.sin(cycle*2*Math.PI)*(actor.dog?.55:1.15);
+ const lean=Math.sin(cycle*2*Math.PI)*(actor.dog?.7:1.35)*Math.PI/180;
+ return {frame,cycle,lift,sway,lean,planted:false};
 }
 export function spritePose(frame,stature){
  const b=frame.bounds||{x:0,y:0,w:frame.w,h:frame.h},scale=stature/b.h;

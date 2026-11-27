@@ -2,7 +2,7 @@ import {gaitPose,spritePose,boneAffine,kneeFor,footTargets} from './animation.js
 import {weatherAt,regionalWeather,hoodRaised} from './weather.js';
 import {equipmentAtlas} from './equipment.js';
 import {readPreferences,savePreference} from './preferences.js';
-import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,resolveSeparation,separateCrowd,blockActors} from './navigation.js';
+import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,coastTarget,resolveSeparation,separateCrowd,blockActors} from './navigation.js';
 import {SCENES,sceneId,combatSceneId,combatStaging,makeActors} from './world-data.js';
 
 const imageCache=new Map(),memories=new Map();
@@ -37,10 +37,10 @@ function polygon(ctx,points){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lin
 export class IsometricWorld {
  constructor(root,state,callbacks){
  this.root=root;this.canvas=root.querySelector('.actors-layer');this.back=root.querySelector('.terrain-layer');this.ctx=this.canvas.getContext('2d');this.bctx=this.back.getContext('2d',{alpha:false});this.mini=root.querySelector('.world-minimap');this.mctx=this.mini?.getContext('2d');
- this.weather=weatherAt(state);this.atmosphere=state.combat&&!this.weather.exposed?'clear':regionalWeather(state);this.state=state;this.callbacks=callbacks;this.id=state.combat?combatSceneId(state):sceneId(state.location);this.scene=SCENES[this.id];this.grid=buildGrid(this.scene.polygon,this.scene.obstacles);this.actors=makeActors(this.scene,state);this.listeners=[];this.raf=0;this.destroyed=false;this.paused=false;this.visible=true;this.suspended=!!document.hidden;this.ready=false;this.last=0;this.time=0;this.cameraDirty=true;this.hover=null;this.target=null;this.destination=null;this.showNames=readPreferences().names;this.combatTimer=null;this.keys=new Set();this.follow=true;this.reduced=document.body.classList.contains('reduce-motion')||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;this.economy=readPreferences().battery;this.pointers=new Map();this.pinch=null;this.social=null;this.nextSocial=8;this.combatFx=null;this.trail=[];
+ this.weather=weatherAt(state);this.atmosphere=state.combat&&!this.weather.exposed?'clear':regionalWeather(state);this.state=state;this.callbacks=callbacks;this.id=state.combat?combatSceneId(state):sceneId(state.location);this.scene=SCENES[this.id];this.grid=buildGrid(this.scene.polygon,this.scene.obstacles);this.actors=makeActors(this.scene,state);this.listeners=[];this.raf=0;this.destroyed=false;this.paused=false;this.visible=true;this.suspended=!!document.hidden;this.ready=false;this.last=0;this.time=0;this.cameraDirty=true;this.hover=null;this.target=null;this.destination=null;this.showNames=readPreferences().names;this.combatTimer=null;this.keys=new Set();this.follow=true;this.reduced=document.body.classList.contains('reduce-motion')||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;this.economy=readPreferences().battery;this.pointers=new Map();this.pinch=null;this.social=null;this.nextSocial=8;this.combatFx=null;this.trail=[];this.puffs=[];this.motes=[];
  this.memoryKey=state.combat?'combat:'+this.id:state.location;
  const old=memories.get(this.memoryKey),entry=this.scene.entry;
- this.player={id:'player',name:state.lead==='berkay'?'Berkay':'Uygar',person:state.lead,atlas:equipmentAtlas(state,state.lead),look:state.gear?.[state.lead],x:old?.x??entry[0],y:old?.y??entry[1],direction:old?.direction??2,path:[],speed:120,acceleration:480,phase:0,hero:true,moving:false};
+ this.player={id:'player',name:state.lead==='berkay'?'Berkay':'Uygar',person:state.lead,atlas:equipmentAtlas(state,state.lead),look:state.gear?.[state.lead],x:old?.x??entry[0],y:old?.y??entry[1],direction:old?.direction??2,path:[],speed:120,acceleration:857,phase:0,hero:true,moving:false};
  this.snap(this.player);
  this.camera={x:old?.camera?.x??this.player.x,y:old?.camera?.y??this.player.y-130,zoom:old?.camera?.zoom??1.12};
  this.createParty();
@@ -59,9 +59,9 @@ export class IsometricWorld {
  if(!waiting&&!this.trail.length){for(let i=24;i>=0;i--)this.trail.push({x:x,y:y+i*10});}
  const brotherSlot=waiting?{x:x-65,y:y+135}:this.trailPoint(70,this.player,-1);
  const dogSlot=waiting?{x:x-20,y:y+175}:this.trailPoint(48,this.player,1);
- this.companion={id:'brother',name:brotherName,person:brotherName.toLowerCase(),atlas:equipmentAtlas(this.state,brotherName.toLowerCase()),look:this.state.gear?.[brotherName.toLowerCase()],x:brotherSlot.x,y:brotherSlot.y,path:[],speed:128,baseSpeed:128,acceleration:450,direction:2,phase:0,moving:false,followWait:0,party:true,waiting};
+ this.companion={id:'brother',name:brotherName,person:brotherName.toLowerCase(),atlas:equipmentAtlas(this.state,brotherName.toLowerCase()),look:this.state.gear?.[brotherName.toLowerCase()],x:brotherSlot.x,y:brotherSlot.y,path:[],speed:128,baseSpeed:128,acceleration:914,direction:2,phase:0,moving:false,followWait:0,party:true,waiting};
  this.snap(this.companion);
- this.dog={id:'pukie',name:'Pukie',atlas:'pukie-walk',x:dogSlot.x,y:dogSlot.y,path:[],speed:142,baseSpeed:142,acceleration:600,direction:2,phase:0,moving:false,followWait:0,party:true,dog:true,stature:40,waiting};
+ this.dog={id:'pukie',name:'Pukie',atlas:'pukie-walk',x:dogSlot.x,y:dogSlot.y,path:[],speed:142,baseSpeed:142,acceleration:1014,direction:2,phase:0,moving:false,followWait:0,party:true,dog:true,stature:40,waiting};
  this.snap(this.dog);resolveSeparation(this.dog,[this.companion,this.player],this.grid,30);
  }
  partyActors(){return [this.companion,this.dog].filter(Boolean);}
@@ -78,7 +78,7 @@ export class IsometricWorld {
   actor.followWait=.32;
  }
  if(behind<16)actor.path=[];
- stepActor(actor,dt);resolveSeparation(actor,[this.player,...this.actors,...this.partyActors().filter(a=>a!==actor)],this.grid,actor.dog?22:28);
+ this.advanceActor(actor,dt);resolveSeparation(actor,[this.player,...this.actors,...this.partyActors().filter(a=>a!==actor)],this.grid,actor.dog?22:28);
  }
  trailPoint(gap,leader,side=0){
   const trail=this.trail||[];
@@ -143,7 +143,7 @@ export class IsometricWorld {
  center(){this.follow=true;this.camera.x=this.player.x;this.camera.y=this.player.y-100;this.clampCamera();this.cameraDirty=true;this.draw();this.canvas.focus({preventScroll:true});}
  toggleNames(){this.showNames=!this.showNames;savePreference('names',this.showNames);this.root.querySelector('[data-world="names"]')?.setAttribute('aria-pressed',String(this.showNames));this.draw();}
  togglePause(){if(this.state.combat||this.combatFx)return;this.paused=!this.paused;this.root.classList.toggle('world-paused',this.paused);this.root.querySelector('[data-world="pause"]')?.setAttribute('aria-pressed',String(this.paused));if(this.paused){this.stop();this.draw();}else this.wake();}
- pickActor(p){const actors=[...this.actors,...this.partyActors(),...(this.enemy?[this.enemy]:[])];return actors.sort((a,b)=>b.y-a.y).find(a=>Math.abs(a.x-p.x)<Math.max(a.dog?20:30,(a.dog?16:22)/this.scale)&&p.y<a.y+20&&p.y>a.y-(a.dog?46:112))||null;}
+ pickActor(p){const actors=[...this.actors,...this.partyActors(),...(this.enemy?[this.enemy]:[])];return actors.sort((a,b)=>b.y-a.y).find(a=>{const body=a.dog?58:Math.max(124,(a.stature||102)+40);const half=a.dog?30:Math.max(48,38/this.scale);return Math.abs(a.x-p.x)<half&&p.y<a.y+28&&p.y>a.y-body;})||null;}
  click(p){
  if(this.state.combat){const actor=this.pickActor(p);if(actor===this.enemy)this.callbacks.enemy();else if(actor?.party)this.callbacks.interact(actor);return;}
  if(this.paused){this.callbacks.message('The world is paused. Press Space or the pause button to resume.');return;}
@@ -171,17 +171,17 @@ export class IsometricWorld {
  wake(){if(this.destroyed||!this.ready||!this.visible||this.suspended||this.paused||this.raf)return;this.last=0;this.raf=requestAnimationFrame(t=>this.frame(t));}
  frame(t){this.raf=0;if(this.destroyed||!this.visible||this.suspended||this.paused)return;const elapsed=this.last?t-this.last:16.7;const cap=this.economy?24:this.reduced?30:60;if(elapsed>=1000/cap-1){if(elapsed>22)this.slowFrames=(this.slowFrames||0)+1;else if(elapsed<17)this.slowFrames=Math.max(0,(this.slowFrames||0)-2);this.lowQuality=!!(this.economy||this.reduced||(this.slowFrames||0)>=2);if((this.slowFrames||0)>=2&&this.dprCap>2&&!this.economy){this.dprCap=Math.max(2,+(this.dprCap-0.5).toFixed(2));this.slowFrames=0;this.resize();}this.last=t;this.update(Math.min(elapsed/1000,.08));if(this.destroyed)return;this.draw();if(this.state.combat&&!this.combatFx)return;if((this.reduced||this.economy)&&!this.player.path.length&&!this.keys.size&&!this.partyActors().some(a=>a.path.length)&&!this.combatFx)return;}this.raf=requestAnimationFrame(n=>this.frame(n));}
  update(dt){
- this.time+=dt;
+ this.time+=dt;this.updateDust(dt);
  if(this.combatFx){this.combatFx.age+=dt;this.updateCombat();return;}
  if(this.state.combat)return;
  const dx=(this.keys.has('d')||this.keys.has('arrowright')?1:0)-(this.keys.has('a')||this.keys.has('arrowleft')?1:0),dy=(this.keys.has('s')||this.keys.has('arrowdown')?1:0)-(this.keys.has('w')||this.keys.has('arrowup')?1:0);
  if(dx||dy){const length=Math.hypot(dx,dy),look=Math.max(40,this.player.speed*.3);const nx=this.player.x+dx/length*look,ny=this.player.y+dy/length*look;this.player.path=[];this.destination=null;this.player.holdVelocity=true;if(isWalkable(this.grid,nx,ny)){this.player.path=[{x:nx,y:ny}];}else if(isWalkable(this.grid,nx,this.player.y)){this.player.path=[{x:nx,y:this.player.y}];}else if(isWalkable(this.grid,this.player.x,ny)){this.player.path=[{x:this.player.x,y:ny}];}}
- else this.player.holdVelocity=false;
- stepActor(this.player,dt);this.pushTrail(this.player);
+ else {this.player.holdVelocity=false;if(!this.player.path.length){const coast=coastTarget(this.player,this.grid);if(coast)this.player.path=[coast];}}
+ this.advanceActor(this.player,dt);this.pushTrail(this.player);
  if(this.target&&!this.player.path.length){const {actor,callback}=this.target;this.target=null;this.destination=null;this.setStatus('');this.faceEachOther(this.player,actor);if(distance(this.player,actor)<=115){if(callback)callback();else this.callbacks.interact(actor);if(this.destroyed)return;}}
  if(!this.reduced&&!this.economy){
  this.updateSocial(dt);
- for(const a of this.actors){if(a===this.target?.actor||this.social&&(a===this.social.a||a===this.social.b))continue;a.wait-=dt;if(a.route&&!a.path.length&&a.wait<=0){const p=a.route[a.routeIndex++%a.route.length];let dest={x:p[0],y:p[1]};for(let tries=0;tries<6;tries++){const occupied=this.actors.some(o=>o!==a&&Math.hypot((o.path?.at(-1)?.x??o.x)-dest.x,(o.path?.at(-1)?.y??o.y)-dest.y)<48);if(!occupied)break;const ang=tries*1.15,r=50+tries*12,nx=p[0]+Math.cos(ang)*r,ny=p[1]+Math.sin(ang)*r;if(isWalkable(this.grid,nx,ny))dest={x:nx,y:ny};}a.path=findPath(this.grid,a,dest,70)||[];a.wait=2.4+((a.routeIndex*5+(a.name||'').length+(a.sprite||0))%8)*.85;}stepActor(a,dt);resolveSeparation(a,[this.player,...this.actors],this.grid,38);}
+ for(const a of this.actors){if(a===this.target?.actor||this.social&&(a===this.social.a||a===this.social.b))continue;a.wait-=dt;if(a.route&&!a.path.length&&a.wait<=0){const p=a.route[a.routeIndex++%a.route.length];let dest={x:p[0],y:p[1]};for(let tries=0;tries<6;tries++){const occupied=this.actors.some(o=>o!==a&&Math.hypot((o.path?.at(-1)?.x??o.x)-dest.x,(o.path?.at(-1)?.y??o.y)-dest.y)<48);if(!occupied)break;const ang=tries*1.15,r=50+tries*12,nx=p[0]+Math.cos(ang)*r,ny=p[1]+Math.sin(ang)*r;if(isWalkable(this.grid,nx,ny))dest={x:nx,y:ny};}a.path=findPath(this.grid,a,dest,70)||[];a.wait=2.4+((a.routeIndex*5+(a.name||'').length+(a.sprite||0))%8)*.85;}this.advanceActor(a,dt);resolveSeparation(a,[this.player,...this.actors],this.grid,38);}
  if(this.time%1<dt)separateCrowd(this.actors,this.grid,42);
  }
  if(this.companion)this.updateFollower(this.companion,this.player,dt,70,-1);
@@ -192,7 +192,7 @@ export class IsometricWorld {
  const ambient=this.actors.filter(a=>a.route);
  if(!this.social&&this.time>this.nextSocial&&ambient.length>=2){const [a,b]=ambient;if(distance(a,b)<70){a.wait=4;b.wait=5;this.nextSocial=this.time+8;return;}a.path=approachPoint(this.grid,a,b,72)||[];b.path=[];this.social={a,b,age:0,phase:0};}
  if(!this.social)return;
- const s=this.social;s.age+=dt;stepActor(s.a,dt);s.b.moving=false;
+ const s=this.social;s.age+=dt;this.advanceActor(s.a,dt);s.b.moving=false;
  if(!s.a.path.length||s.age>7){this.faceEachOther(s.a,s.b);if(s.phase===0){s.phase=1;s.age=0;s.a.bubble={text:s.a.barks[0],until:this.time+3.2};}else if(s.phase===1&&s.age>3.5){s.phase=2;s.age=0;s.b.bubble={text:s.b.barks[0],until:this.time+3.2};}else if(s.phase===2&&s.age>4){s.a.wait=3;s.b.wait=4;this.social=null;this.nextSocial=this.time+17;}}
  }
  playCombat(id,nextState,done){
@@ -205,7 +205,7 @@ export class IsometricWorld {
  this.wake();
  }
  finishCombat(){const fx=this.combatFx;if(!fx)return;this.combatFx=null;clearTimeout(this.combatTimer);this.combatTimer=null;fx.done();}
- updateCombat(){const f=this.combatFx;stepActor(this.player,1/30);this.player.direction=3;if(f.age>.52&&f.age<.92){const t=(f.age-.52)/.4;this.enemy.x=f.enemyStart.x-Math.sin(t*Math.PI)*48;this.enemy.y=f.enemyStart.y+Math.sin(t*Math.PI)*24;this.enemy.moving=true;this.enemy.phase+=.15;}else this.enemy.moving=false;if(f.age>1.18)this.finishCombat();}
+ updateCombat(){const f=this.combatFx;this.advanceActor(this.player,1/30);this.player.direction=3;if(f.age>.52&&f.age<.92){const t=(f.age-.52)/.4;this.enemy.x=f.enemyStart.x-Math.sin(t*Math.PI)*48;this.enemy.y=f.enemyStart.y+Math.sin(t*Math.PI)*24;this.enemy.moving=true;this.enemy.phase+=.15;}else this.enemy.moving=false;if(f.age>1.18)this.finishCombat();}
  transform(ctx){ctx.setTransform(this.dpr*this.scale,0,0,this.dpr*this.scale,this.dpr*(this.width/2-this.camera.x*this.scale),this.dpr*(this.height/2-this.camera.y*this.scale));}
  draw(){
  if(!this.ready||this.destroyed)return;
@@ -214,9 +214,10 @@ export class IsometricWorld {
  if(this.companion?.waiting)this.drawWaitingPoint();
  if(this.player.path.length){ctx.strokeStyle='rgba(229,202,136,.30)';ctx.lineWidth=1.5/this.scale;ctx.setLineDash([3/this.scale,7/this.scale]);ctx.beginPath();ctx.moveTo(this.player.x,this.player.y);for(const p of this.player.path)ctx.lineTo(p.x,p.y);ctx.stroke();ctx.setLineDash([]);}
  if(this.destination){const p=this.destination;ctx.strokeStyle='#edd693';ctx.lineWidth=1.2/this.scale;ctx.beginPath();ctx.ellipse(p.x,p.y,18,9,0,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(p.x-24,p.y);ctx.lineTo(p.x-11,p.y);ctx.moveTo(p.x+11,p.y);ctx.lineTo(p.x+24,p.y);ctx.stroke();}
+ this.drawDust();
  const drawables=[...this.actors,this.player,...this.partyActors(),...(this.enemy?[this.enemy]:[]),...(this.occluderSprites||[])].sort((a,b)=>a.y-b.y);
  for(const actor of drawables){if(actor.occluder){if(actor.canvas)ctx.drawImage(actor.canvas,actor.ox,actor.oy);else{ctx.save();polygon(ctx,actor.polygon);ctx.clip();ctx.drawImage(this.background,0,0,WORLD_W,WORLD_H);ctx.restore();}}else this.drawActor(actor);}
- this.drawWeather();
+ this.drawWeather();this.drawMotes();
  for(const a of [this.player,...this.actors,...this.partyActors(),...(this.enemy?[this.enemy]:[])]){if(a.bubble?.until>this.time)this.drawBubble(a,a.bubble.text);}
  this.layoutLabels();
  if(this.combatFx)this.drawCombatFx();
@@ -258,20 +259,59 @@ export class IsometricWorld {
  ctx.fillStyle='#716b52';ctx.beginPath();ctx.ellipse(x,y,14,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#7ca9a2';ctx.beginPath();ctx.ellipse(x,y-2,10,3.5,0,0,Math.PI*2);ctx.fill();
  ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.fillStyle='#e0d6ad';ctx.fillText('WAITING POINT',this.companion.x,this.companion.y+32);ctx.restore();
  }
+ advanceActor(actor,dt){
+  const prev=actor.phase||0;
+  const moved=stepActor(actor,dt);
+  this.emitFootDust(actor,prev,actor.phase||0);
+  return moved;
+ }
+ emitFootDust(actor,prev,phase){
+  if(this.reduced||this.economy||this.lowQuality||actor.planted||!actor.moving)return;
+  const a=((prev%4)+4)%4,b=((phase%4)+4)%4;
+  if(!((a<2&&b>=2)||(a>b)))return;
+  const n=actor.dog?2:3;
+  for(let i=0;i<n;i++)this.puffs.push({x:actor.x+(Math.random()-.5)*8,y:actor.y+(Math.random()-.5)*3,r:2+Math.random()*2.2,life:.26+Math.random()*.16,age:0,a:.2});
+  if(this.puffs.length>40)this.puffs.splice(0,this.puffs.length-40);
+ }
+ updateDust(dt){
+  if(this.reduced||this.economy||this.lowQuality){if(this.puffs.length)this.puffs.length=0;return;}
+  if(!this.motes.length){for(let i=0;i<10;i++)this.motes.push({x:Math.random()*WORLD_W,y:Math.random()*WORLD_H,s:.55+Math.random()*1.05,vx:(Math.random()-.5)*8,vy:-3.5-Math.random()*5,ph:Math.random()*Math.PI*2});}
+  for(let i=this.puffs.length-1;i>=0;i--){const p=this.puffs[i];p.age+=dt;p.y-=dt*6;p.r+=dt*8;if(p.age>=p.life)this.puffs.splice(i,1);}
+  for(const m of this.motes){m.x+=m.vx*dt;m.y+=m.vy*dt;m.ph+=dt*1.4;if(m.y<0){m.y=WORLD_H;m.x=Math.random()*WORLD_W;}if(m.x<0)m.x+=WORLD_W;else if(m.x>WORLD_W)m.x-=WORLD_W;}
+ }
+ drawDust(){
+  const ctx=this.ctx;
+  for(const p of this.puffs){const t=1-p.age/p.life;ctx.fillStyle='rgba(196,180,140,'+(p.a*t).toFixed(3)+')';ctx.beginPath();ctx.ellipse(p.x,p.y,p.r,p.r*.45,0,0,Math.PI*2);ctx.fill();}
+ }
+ drawMotes(){
+  if(!this.motes.length)return;
+  const ctx=this.ctx;
+  for(const m of this.motes){const a=.08+.1*(.5+.5*Math.sin(m.ph));ctx.fillStyle='rgba(230,220,180,'+a.toFixed(3)+')';ctx.beginPath();ctx.arc(m.x,m.y,m.s,0,Math.PI*2);ctx.fill();}
+ }
  drawGroundShadow(a){
  const ctx=this.ctx,dog=!!a.dog,rx=dog?9:13,ry=dog?3.1:4.2;
+ const gait=gaitPose(a,this.reduced);
+ const pulse=a.moving&&!gait.planted?1-0.12*Math.abs(Math.sin(gait.cycle*4*Math.PI)):1;
+ const heading=a.heading||{x:0,y:1};
+ const fx=-heading.y*(dog?3.2:4.6),fy=heading.x*(dog?1.2:1.6);
  ctx.save();
- ctx.fillStyle='rgba(6,8,6,.22)';
- ctx.beginPath();ctx.ellipse(a.x,a.y+0.4,rx*1.12,ry*1.08,0,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='rgba(4,6,4,.42)';
- ctx.beginPath();ctx.ellipse(a.x,a.y,rx*.88,ry*.82,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='rgba(6,8,6,.16)';
+ ctx.beginPath();ctx.ellipse(a.x,a.y+0.4,rx*1.22*pulse,ry*1.16*pulse,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='rgba(4,6,4,.28)';
+ ctx.beginPath();ctx.ellipse(a.x+fx,a.y+fy,rx*.62*pulse,ry*.55*pulse,0,0,Math.PI*2);ctx.fill();
+ ctx.beginPath();ctx.ellipse(a.x-fx,a.y-fy,rx*.62*pulse,ry*.55*pulse,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='rgba(4,6,4,.34)';
+ ctx.beginPath();ctx.ellipse(a.x,a.y,rx*.8*pulse,ry*.74*pulse,0,0,Math.PI*2);ctx.fill();
  ctx.restore();
  }
  drawSelectionMark(a){
  const ctx=this.ctx,dog=!!a.dog;
+ const color=a.enemy?'#e78e78':a.hero?'#d5e29e':a.party?'#91c5c0':(a.accent||'#edca7f');
  ctx.save();
- ctx.strokeStyle=a.enemy?'#e78e78':a.hero?'#d5e29e':a.party?'#91c5c0':(a.accent||'#edca7f');
- ctx.lineWidth=1.1/this.scale;
+ ctx.fillStyle=color+'33';
+ ctx.beginPath();ctx.ellipse(a.x,a.y,dog?13:17.5,dog?4:5.4,0,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle=color;
+ ctx.lineWidth=1.35/this.scale;
  ctx.beginPath();ctx.ellipse(a.x,a.y,dog?13:17.5,dog?4:5.4,0,0,Math.PI*2);ctx.stroke();
  ctx.restore();
  }
@@ -285,7 +325,7 @@ export class IsometricWorld {
  if(this.combatFx){const f=this.combatFx;if(a.hero&&f.id==='attack'&&f.age<.38)ox=Math.sin(f.age/.38*Math.PI)*9;if(a.enemy&&f.id==='attack'&&f.age>.17&&f.age<.5&&f.hit>0)ox=Math.sin(f.age*40)*4;}
  const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+1.2;
  ctx.save();
- ctx.translate(a.x+ox,a.y+oy+footShift);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;
+ const bob=gait.planted?0:-(gait.lift||0),sway=gait.planted?0:(gait.sway||0);ctx.translate(a.x+ox+sway,a.y+oy+footShift+bob);if(mirror)ctx.scale(-1,1);if(!gait.planted&&gait.lean)ctx.rotate(gait.lean);if(a.filter)ctx.filter=a.filter;
  let rigged=false;
  if(rigged){try{this.drawRig(a,pose,gait,meta,row,frame);}catch{rigged=false;}}
  if(!rigged){const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);}
@@ -350,6 +390,8 @@ export class IsometricWorld {
  drawPin(a,on){const ctx=this.ctx,h=a.dog?42:a.hero||a.party?102:a.enemy?107:(a.stature||99),apex=a.y-h-22;ctx.save();ctx.fillStyle=on?'#f1d285':'#d4bf87';ctx.strokeStyle='rgba(18,22,16,.5)';ctx.lineWidth=1/Math.max(.6,this.scale);ctx.beginPath();ctx.moveTo(a.x,apex);ctx.lineTo(a.x+5,apex+8);ctx.lineTo(a.x,apex+16);ctx.lineTo(a.x-5,apex+8);ctx.closePath();ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(a.x,apex+16);ctx.lineTo(a.x,apex+22);ctx.stroke();ctx.restore();}
  layoutLabels(){
   const ctx=this.ctx,items=[],pins=[],top=52,bottom=58,near=150;
+  const large=document.body.classList.contains('large-text');
+  const fontSize=large?13:10,tagSize=large?10:8,labelH=large?20:16;
   const pin=(a,on)=>{if(a?.location)pins.push({a,on});};
   const consider=(a,priority)=>{
    if(!a)return;
@@ -363,28 +405,51 @@ export class IsometricWorld {
   };
   consider(this.player,5);if(this.enemy)consider(this.enemy,5);for(const a of this.partyActors())consider(a,4);for(const a of this.actors)consider(a,a.location?3:1);
   items.sort((a,b)=>b.priority-a.priority||a.p.y-b.p.y);
-  const ambient=items.filter(i=>!i.forced&&!i.a.hero&&!i.a.enemy);
+  const ambient=items.filter(i=>!i.forced&&!i.a.hero&&!i.a.enemy&&!i.a.party);
   if(ambient.length>2){const keep=new Set(ambient.map(i=>({i,d:Math.hypot(i.a.x-this.player.x,i.a.y-this.player.y)})).sort((a,b)=>a.d-b.d).slice(0,2).map(x=>x.i));for(const i of ambient){if(!keep.has(i)){i.cull=true;pin(i.a,false);}}}
-  ctx.save();ctx.setTransform(this.dpr,0,0,this.dpr,0,0);ctx.font='600 10px Arial';
-  this.labelRects=[{x:0,y:this.height-56,w:this.width,h:56},{x:0,y:0,w:Math.min(240,this.width*.62),h:46}];
-  const hits=(x,y,w)=>this.labelRects.some(r=>x<r.x+r.w+4&&x+w+4>r.x&&y<r.y+18&&y+16>r.y);
-  const shifts=[[0,0],[0,-18],[0,18],[0,-36],[0,36],[-22,-18],[22,-18],[-22,18],[22,18],[-36,0],[36,0]];
+  ctx.save();ctx.setTransform(this.dpr,0,0,this.dpr,0,0);ctx.font='600 '+fontSize+'px Arial';
+  const reserved=[{x:0,y:this.height-56,w:this.width,h:56},{x:0,y:0,w:Math.min(240,this.width*.62),h:46}];
+  const overlap=(A,B,pad=5)=>A.x<B.x+B.w+pad&&A.x+A.w+pad>B.x&&A.y<B.y+B.h+pad&&A.y+A.h+pad>B.y;
+  const boxes=[];
   for(const item of items){
    if(item.cull)continue;
    const w=Math.min(this.width-16,ctx.measureText(item.label).width+14);
-   const baseX=clamp(item.p.x-w/2,8,this.width-w-8),baseY=clamp(item.p.y-(item.a.dog?36:item.a.stature||102)*this.scale-18,top,this.height-bottom);
-   let placed=null;
-   for(const [dx,dy] of shifts){const x=clamp(baseX+dx,8,this.width-w-8),y=clamp(baseY+dy,top,this.height-bottom);if(!hits(x,y,w)){placed={x,y,w};break;}}
-   if(!placed){if(!item.forced)pin(item.a,item.a.location===this.state.location);continue;}
-   this.labelRects.push(placed);this.paintLabel(item.a,item.label,placed);
+   const head=item.p.y-(item.a.dog?36:item.a.stature||102)*this.scale-18;
+   const baseX=clamp(item.p.x-w/2,8,this.width-w-8),baseY=clamp(head,top,this.height-bottom);
+   boxes.push({item,x:baseX,y:baseY,w,h:labelH,baseX,baseY,head});
   }
+  for(let iter=0;iter<16;iter++){
+   let moved=false;
+   for(let i=0;i<boxes.length;i++){
+    for(let j=i+1;j<boxes.length;j++){
+     const A=boxes[i],B=boxes[j];
+     if(!overlap(A,B,6))continue;
+     const pa=A.item.priority,pb=B.item.priority;
+     const ta=pa>pb?0.2:pa<pb?0.8:0.5,tb=1-ta;
+     let vy=((B.y+B.h/2)>=(A.y+A.h/2)?1:-1)*8,vx=((B.x+B.w/2)>=(A.x+A.w/2)?1:-1)*5;
+     const nudge=(box,sx,sy)=>{
+      box.x=clamp(box.x+sx,8,this.width-box.w-8);
+      box.y=clamp(box.y+sy,top,this.height-bottom);
+      const dx=box.x-box.baseX,dy=box.y-box.baseY,d=Math.hypot(dx,dy),cap=52;
+      if(d>cap){box.x=clamp(box.baseX+dx/d*cap,8,this.width-box.w-8);box.y=clamp(box.baseY+dy/d*cap,top,this.height-bottom);}
+      if(box.y+box.h>box.head+8)box.y=clamp(Math.min(box.y,box.head-2),top,this.height-bottom);
+     };
+     nudge(A,-vx*ta,-vy*ta);nudge(B,vx*tb,vy*tb);moved=true;
+    }
+    for(const r of reserved){if(overlap(boxes[i],r,4)){boxes[i].y=clamp(boxes[i].y-(r.y<this.height/2?12:-12),top,this.height-bottom);moved=true;}}
+   }
+   if(!moved)break;
+  }
+  this.labelRects=reserved.concat(boxes.map(b=>({x:b.x,y:b.y,w:b.w,h:b.h})));
+  for(const box of boxes)this.paintLabel(box.item.a,box.item.label,box,fontSize,tagSize,labelH);
   ctx.restore();
   for(const p of pins)this.drawPin(p.a,p.on);
  }
- paintLabel(a,label,r){
+ paintLabel(a,label,r,fontSize=10,tagSize=8,labelH=16){
   const ctx=this.ctx,{x,y,w}=r;
-  ctx.fillStyle='rgba(9,19,15,.52)';rounded(ctx,x,y,w,16,3);ctx.fill();ctx.strokeStyle=a.enemy?'rgba(238,170,146,.7)':a.hero?'rgba(203,217,163,.7)':(a.accent||'rgba(213,180,124,.65)');ctx.lineWidth=.8;ctx.stroke();ctx.fillStyle='rgba(245,239,220,.92)';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,x+w/2,y+8,w-8);ctx.textBaseline='alphabetic';
-  if(a.location&&(a===this.hover||a===this.target?.actor)){ctx.font='bold 8px Arial';ctx.fillStyle=a.accent||'#ecce84';ctx.fillText(a.tag||'TALK',x+w/2,y-6);ctx.font='600 10px Arial';}
+  ctx.font='600 '+fontSize+'px Arial';
+  ctx.fillStyle='rgba(9,19,15,.52)';rounded(ctx,x,y,w,labelH,3);ctx.fill();ctx.strokeStyle=a.enemy?'rgba(238,170,146,.7)':a.hero?'rgba(203,217,163,.7)':(a.accent||'rgba(213,180,124,.65)');ctx.lineWidth=.8;ctx.stroke();ctx.fillStyle='rgba(245,239,220,.92)';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,x+w/2,y+labelH/2,w-8);ctx.textBaseline='alphabetic';
+  if(a.location&&(a===this.hover||a===this.target?.actor)){ctx.font='bold '+tagSize+'px Arial';ctx.fillStyle=a.accent||'#ecce84';ctx.fillText(a.tag||'TALK',x+w/2,y-6);ctx.font='600 '+fontSize+'px Arial';}
   if(a.enemy){const hp=this.combatFx?Math.max(0,this.state.combat.hp-(this.combatFx.age>.3?this.combatFx.hit:0)):this.state.combat.hp;ctx.fillStyle='#341c16';ctx.fillRect(x,y+18,w,4);ctx.fillStyle='#d8856c';ctx.fillRect(x,y+18,w*hp/this.state.combat.maxHp,4);}
  }
 

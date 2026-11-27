@@ -22,35 +22,65 @@ export function approachPoint(grid,from,target,radius=62){
  const choices=[];for(let i=0;i<12;i++){const a=i*Math.PI/6,p={x:target.x+Math.cos(a)*radius,y:target.y+Math.sin(a)*radius};if(isWalkable(grid,p.x,p.y))choices.push(p);}choices.sort((a,b)=>distance(from,a)-distance(from,b));
  for(const p of choices){const path=findPath(grid,from,p,25);if(path)return path;}return null;
 }
+const RAMP=.14;
+export function facingFrom(dx,dy,current){
+ const ax=Math.abs(dx),ay=Math.abs(dy);
+ let sx=dx;
+ if(current!=null&&ay>=ax*.85){
+  const east=current===0||current===3;
+  if((dx>=0)===east||ax<ay*.38)sx=east?Math.max(ax,1):-Math.max(ax,1);
+ }
+ return dy>=0?(sx>=0?0:1):(sx<0?2:3);
+}
+export function coastTarget(actor,grid){
+ const v=actor.velocity||0,a=actor.acceleration||0,h=actor.heading;
+ if(v<8||!a||!h)return null;
+ let dist=(v*v)/(2*a);
+ for(let i=0;i<4;i++){
+  const x=actor.x+h.x*dist,y=actor.y+h.y*dist;
+  if(isWalkable(grid,x,y))return {x,y};
+  dist*=.6;
+ }
+ return null;
+}
 export function stepActor(actor,dt){
- const elapsed=Math.min(.08,Math.max(0,dt));let speed=actor.speed;
- if(actor.acceleration){
+ const elapsed=Math.min(.08,Math.max(0,dt));
+ const accel=actor.acceleration||(actor.speed?actor.speed/RAMP:0);
+ let speed=actor.speed;
+ if(accel){
   let remaining=0,x=actor.x,y=actor.y;
   if(actor.holdVelocity)remaining=Infinity;
   else for(const p of actor.path||[]){remaining+=Math.hypot(p.x-x,p.y-y);x=p.x;y=p.y;}
-  const cruise=actor.holdVelocity||remaining>36;
-  const target=(actor.path?.length||actor.holdVelocity)?Math.min(actor.speed,cruise?actor.speed:Math.sqrt(2*actor.acceleration*Math.max(remaining,.01))):0;
+  const stopDist=(speed*speed)/(2*Math.max(accel,.01));
+  const cruise=actor.holdVelocity||remaining>stopDist+6;
+  const target=(actor.path?.length||actor.holdVelocity)?Math.min(actor.speed,cruise?actor.speed:Math.sqrt(2*accel*Math.max(remaining,.01))):0;
   const velocity=actor.velocity||0;
-  actor.velocity=velocity+Math.sign(target-velocity)*Math.min(Math.abs(target-velocity),actor.acceleration*elapsed);
+  actor.velocity=velocity+Math.sign(target-velocity)*Math.min(Math.abs(target-velocity),accel*elapsed);
   speed=actor.velocity;
  }
+ const stride=actor.dog?10:18;
  let budget=speed*elapsed,moved=0;
  while(budget>0&&actor.path?.length){
   const target=actor.path[0],dx=target.x-actor.x,dy=target.y-actor.y,d=Math.hypot(dx,dy);
   if(d<.01){actor.path.shift();continue;}
-  const facing=dy>=0?(dx>=0?0:1):(dx<0?2:3);
+  const facing=facingFrom(dx,dy,actor.direction);
   if(facing!==actor.direction){
    actor.faceTimer=(actor.faceTimer||0)+elapsed;
-   if(actor.faceTimer>.08||!actor.moving)actor.direction=facing;
+   const flipLR=(facing===0||facing===3)!==(actor.direction===0||actor.direction===3);
+   const nearVertical=Math.abs(dx)<Math.abs(dy)*.45;
+   const hold=flipLR&&nearVertical?.16:.1;
+   if(actor.faceTimer>hold||!actor.moving)actor.direction=facing;
   }else actor.faceTimer=0;
   actor.heading={x:dx/d,y:dy/d};
   const step=Math.min(budget,d);actor.x+=dx/d*step;actor.y+=dy/d*step;budget-=step;moved+=step;
   if(step>=d-.001)actor.path.shift();
  }
+ if(moved>.01)actor.phase=(actor.phase||0)+moved/stride;
  actor.moving=moved>.01;
- if(actor.moving)actor.phase=(actor.phase||0)+moved/(actor.dog?10:18);
+ const now=accel?(actor.velocity||0):moved/Math.max(elapsed,.0001);
+ actor.planted=!actor.moving||now<8;
  if(!actor.path?.length&&!actor.holdVelocity){
-  if(actor.acceleration&&actor.velocity){actor.velocity=Math.max(0,actor.velocity-actor.acceleration*elapsed);if(actor.velocity<4)actor.velocity=0;}
+  if(accel&&actor.velocity){actor.velocity=Math.max(0,actor.velocity-accel*elapsed);if(actor.velocity<8){actor.velocity=0;actor.planted=true;}}
   else actor.velocity=0;
  }
  return moved;
