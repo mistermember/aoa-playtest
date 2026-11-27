@@ -2,7 +2,7 @@ import {gaitPose,spritePose,boneAffine,kneeFor,footTargets} from './animation.js
 import {weatherAt,regionalWeather,hoodRaised} from './weather.js';
 import {equipmentAtlas} from './equipment.js';
 import {readPreferences,savePreference} from './preferences.js';
-import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,resolveSeparation,separateCrowd} from './navigation.js';
+import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,resolveSeparation,separateCrowd,blockActors} from './navigation.js';
 import {SCENES,sceneId,combatSceneId,combatStaging,makeActors} from './world-data.js';
 
 const imageCache=new Map(),memories=new Map();
@@ -38,10 +38,9 @@ export class IsometricWorld {
  constructor(root,state,callbacks){
  this.root=root;this.canvas=root.querySelector('.actors-layer');this.back=root.querySelector('.terrain-layer');this.ctx=this.canvas.getContext('2d');this.bctx=this.back.getContext('2d',{alpha:false});this.mini=root.querySelector('.world-minimap');this.mctx=this.mini?.getContext('2d');
  this.weather=weatherAt(state);this.atmosphere=state.combat&&!this.weather.exposed?'clear':regionalWeather(state);this.state=state;this.callbacks=callbacks;this.id=state.combat?combatSceneId(state):sceneId(state.location);this.scene=SCENES[this.id];this.grid=buildGrid(this.scene.polygon,this.scene.obstacles);this.actors=makeActors(this.scene,state);this.listeners=[];this.raf=0;this.destroyed=false;this.paused=false;this.visible=true;this.suspended=!!document.hidden;this.ready=false;this.last=0;this.time=0;this.cameraDirty=true;this.hover=null;this.target=null;this.destination=null;this.showNames=readPreferences().names;this.combatTimer=null;this.keys=new Set();this.follow=true;this.reduced=document.body.classList.contains('reduce-motion')||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;this.economy=readPreferences().battery;this.pointers=new Map();this.pinch=null;this.social=null;this.nextSocial=8;this.combatFx=null;this.trail=[];
- const old=memories.get(this.id),entry=this.scene.entry;
+ this.memoryKey=state.combat?'combat:'+this.id:state.location;
+ const old=memories.get(this.memoryKey),entry=this.scene.entry;
  this.player={id:'player',name:state.lead==='berkay'?'Berkay':'Uygar',person:state.lead,atlas:equipmentAtlas(state,state.lead),look:state.gear?.[state.lead],x:old?.x??entry[0],y:old?.y??entry[1],direction:old?.direction??2,path:[],speed:120,acceleration:480,phase:0,hero:true,moving:false};
- // Enter a selected destination at a nearby walkable point; preserve continuous movement within a district.
- if(!old&&state.location!=='square'&&!state.combat){const p=this.actors.find(a=>a.location===state.location);if(p){this.player.x=p.x;this.player.y=p.y+125;}}
  this.snap(this.player);
  this.camera={x:old?.camera?.x??this.player.x,y:old?.camera?.y??this.player.y-130,zoom:old?.camera?.zoom??1.12};
  this.createParty();
@@ -57,30 +56,44 @@ export class IsometricWorld {
  if(waiting&&(this.state.combat||waitingAt!==this.state.location))return;
  const brotherName=this.state.lead==='berkay'?'Uygar':'Berkay',anchor=waiting?this.actors.find(a=>a.location===waitingAt):null;
  const x=anchor?.x??this.player.x,y=anchor?.y??this.player.y;
- this.companion={id:'brother',name:brotherName,person:brotherName.toLowerCase(),atlas:equipmentAtlas(this.state,brotherName.toLowerCase()),look:this.state.gear?.[brotherName.toLowerCase()],x:x-65,y:y+(waiting?135:35),path:[],speed:128,baseSpeed:128,acceleration:450,direction:2,phase:0,moving:false,followWait:0,party:true,waiting};
+ if(!waiting&&!this.trail.length){for(let i=24;i>=0;i--)this.trail.push({x:x,y:y+i*10});}
+ const brotherSlot=waiting?{x:x-65,y:y+135}:this.trailPoint(70,this.player,-1);
+ const dogSlot=waiting?{x:x-20,y:y+175}:this.trailPoint(48,this.player,1);
+ this.companion={id:'brother',name:brotherName,person:brotherName.toLowerCase(),atlas:equipmentAtlas(this.state,brotherName.toLowerCase()),look:this.state.gear?.[brotherName.toLowerCase()],x:brotherSlot.x,y:brotherSlot.y,path:[],speed:128,baseSpeed:128,acceleration:450,direction:2,phase:0,moving:false,followWait:0,party:true,waiting};
  this.snap(this.companion);
- this.dog={id:'pukie',name:'Pukie',atlas:'pukie-walk',x:this.companion.x-45,y:this.companion.y+40,path:[],speed:142,baseSpeed:142,acceleration:600,direction:2,phase:0,moving:false,followWait:0,party:true,dog:true,stature:40,waiting};
- this.snap(this.dog);resolveSeparation(this.dog,[this.companion],this.grid,30);
+ this.dog={id:'pukie',name:'Pukie',atlas:'pukie-walk',x:dogSlot.x,y:dogSlot.y,path:[],speed:142,baseSpeed:142,acceleration:600,direction:2,phase:0,moving:false,followWait:0,party:true,dog:true,stature:40,waiting};
+ this.snap(this.dog);resolveSeparation(this.dog,[this.companion,this.player],this.grid,30);
  }
  partyActors(){return [this.companion,this.dog].filter(Boolean);}
- updateFollower(actor,leader,dt,gap){
+ updateFollower(actor,leader,dt,gap,side){
  if(actor.waiting||actor.sheltered||this.target?.actor===actor)return;
  actor.followWait-=dt;
- const behind=distance(actor,leader);actor.speed=Math.min(actor.baseSpeed*1.35,Math.max(actor.baseSpeed*.55,(leader.velocity||leader.speed||110)+(behind-gap-20)*1.1));
- const point=this.trailPoint(gap,leader);
- if(distance(actor,point)>14&&actor.followWait<=0){actor.path=approachPoint(this.grid,actor,point,6)||findPath(this.grid,actor,point,70)||[];actor.followWait=.28;}
- if(distance(actor,leader)<gap*.55)actor.path=[];
- stepActor(actor,dt);resolveSeparation(actor,[this.player,...this.actors,...this.partyActors().filter(a=>a!==actor)],this.grid,actor.dog?20:26);
+ const point=this.trailPoint(gap,leader,side);
+ const behind=distance(actor,point);
+ actor.speed=Math.min(actor.baseSpeed*1.35,Math.max(actor.baseSpeed*.55,(leader.velocity||leader.speed||110)+(behind-18)*1.1));
+ if(behind>22&&actor.followWait<=0){
+  const blockers=[this.player,...this.partyActors().filter(a=>a!==actor)];
+  const blocked=blockActors(this.grid,blockers,actor,actor.dog?22:26);
+  actor.path=approachPoint(blocked,actor,point,8)||findPath(blocked,actor,point,70)||approachPoint(this.grid,actor,point,8)||findPath(this.grid,actor,point,70)||[];
+  actor.followWait=.32;
  }
- trailPoint(gap,leader){
+ if(behind<16)actor.path=[];
+ stepActor(actor,dt);resolveSeparation(actor,[this.player,...this.actors,...this.partyActors().filter(a=>a!==actor)],this.grid,actor.dog?22:28);
+ }
+ trailPoint(gap,leader,side=0){
   const trail=this.trail||[];
-  let acc=0,px=leader.x,py=leader.y;
+  let acc=0,px=leader.x,py=leader.y,point=null;
   for(let i=trail.length-1;i>=0;i--){
    const p=trail[i],d=Math.hypot(p.x-px,p.y-py);
-   if(acc+d>=gap){const u=d?(gap-acc)/d:0;return {x:px+(p.x-px)*u,y:py+(p.y-py)*u};}
+   if(acc+d>=gap){const u=d?(gap-acc)/d:0;point={x:px+(p.x-px)*u,y:py+(p.y-py)*u};break;}
    acc+=d;px=p.x;py=p.y;
   }
-  return {x:px,y:py};
+  if(!point)point={x:px,y:py+gap};
+  let hx=0,hy=1;
+  if(leader.heading&&(leader.heading.x||leader.heading.y)){hx=leader.heading.x;hy=leader.heading.y;}
+  else if(trail.length>=2){const a=trail[trail.length-1],b=trail[Math.max(0,trail.length-8)],d=Math.hypot(a.x-b.x,a.y-b.y)||1;hx=(a.x-b.x)/d;hy=(a.y-b.y)/d;}
+  const len=Math.hypot(hx,hy)||1;hx/=len;hy/=len;
+  return {x:point.x+(-hy)*side*34,y:point.y+(hx)*side*34};
  }
  pushTrail(leader){
   this.trail=this.trail||[];
@@ -171,8 +184,8 @@ export class IsometricWorld {
  for(const a of this.actors){if(a===this.target?.actor||this.social&&(a===this.social.a||a===this.social.b))continue;a.wait-=dt;if(a.route&&!a.path.length&&a.wait<=0){const p=a.route[a.routeIndex++%a.route.length];let dest={x:p[0],y:p[1]};for(let tries=0;tries<6;tries++){const occupied=this.actors.some(o=>o!==a&&Math.hypot((o.path?.at(-1)?.x??o.x)-dest.x,(o.path?.at(-1)?.y??o.y)-dest.y)<48);if(!occupied)break;const ang=tries*1.15,r=50+tries*12,nx=p[0]+Math.cos(ang)*r,ny=p[1]+Math.sin(ang)*r;if(isWalkable(this.grid,nx,ny))dest={x:nx,y:ny};}a.path=findPath(this.grid,a,dest,70)||[];a.wait=2.4+((a.routeIndex*5+(a.name||'').length+(a.sprite||0))%8)*.85;}stepActor(a,dt);resolveSeparation(a,[this.player,...this.actors],this.grid,38);}
  if(this.time%1<dt)separateCrowd(this.actors,this.grid,42);
  }
- if(this.companion)this.updateFollower(this.companion,this.player,dt,65);
- if(this.dog)this.updateFollower(this.dog,this.companion,dt,38);
+ if(this.companion)this.updateFollower(this.companion,this.player,dt,70,-1);
+ if(this.dog)this.updateFollower(this.dog,this.player,dt,48,1);
  if(this.follow&&!this.drag){const targetX=this.player.x,targetY=this.player.y-85,dx=targetX-this.camera.x,dy=targetY-this.camera.y;const deadX=Math.max(48,(this.width/this.scale)*0.20),deadY=Math.max(36,(this.height/this.scale)*0.16);let mx=0,my=0;if(Math.abs(dx)>deadX)mx=dx-Math.sign(dx)*deadX;if(Math.abs(dy)>deadY)my=dy-Math.sign(dy)*deadY;if(mx||my){this.camera.x+=mx*Math.min(1,dt*4);this.camera.y+=my*Math.min(1,dt*4);this.clampCamera();this.cameraDirty=true;}}
  }
  updateSocial(dt){
@@ -246,17 +259,12 @@ export class IsometricWorld {
  ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.fillStyle='#e0d6ad';ctx.fillText('WAITING POINT',this.companion.x,this.companion.y+32);ctx.restore();
  }
  drawGroundShadow(a){
- const ctx=this.ctx,dog=!!a.dog,rx=dog?10:15.5,ry=dog?3.2:4.8,sx=dog?6:10,sy=dog?3.2:6;
- // Scene sun is from the upper-left; building shadows fall down-right.
+ const ctx=this.ctx,dog=!!a.dog,rx=dog?9:13,ry=dog?3.1:4.2;
  ctx.save();
- ctx.fillStyle='rgba(7,9,7,.12)';
- ctx.beginPath();ctx.ellipse(a.x+sx*.45,a.y+sy*.45,rx*1.55,ry*1.4,.28,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='rgba(6,8,6,.18)';
- ctx.beginPath();ctx.ellipse(a.x+sx,a.y+sy,rx*1.12,ry*1.02,.32,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='rgba(5,7,5,.30)';
- ctx.beginPath();ctx.ellipse(a.x+.8,a.y+.4,rx*1.08,ry*1.05,0,0,Math.PI*2);ctx.fill();
- ctx.fillStyle='rgba(4,6,4,.50)';
- ctx.beginPath();ctx.ellipse(a.x,a.y,rx*.82,ry*.8,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='rgba(6,8,6,.22)';
+ ctx.beginPath();ctx.ellipse(a.x,a.y+0.4,rx*1.12,ry*1.08,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='rgba(4,6,4,.42)';
+ ctx.beginPath();ctx.ellipse(a.x,a.y,rx*.88,ry*.82,0,0,Math.PI*2);ctx.fill();
  ctx.restore();
  }
  drawSelectionMark(a){
@@ -275,9 +283,13 @@ export class IsometricWorld {
  const drawH=a.dog?40:a.hero||a.party?102:a.enemy?107:(a.stature||99),pose=spritePose(rect,drawH);
  const mirror=!directional&&(a.direction===0||a.direction===3);let ox=0,oy=0;
  if(this.combatFx){const f=this.combatFx;if(a.hero&&f.id==='attack'&&f.age<.38)ox=Math.sin(f.age/.38*Math.PI)*9;if(a.enemy&&f.id==='attack'&&f.age>.17&&f.age<.5&&f.hit>0)ox=Math.sin(f.age*40)*4;}
- const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h;
+ const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+1.2;
  ctx.save();
- ctx.translate(a.x+ox,a.y+oy+footShift);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);if(a.look)this.drawEquipment(a,pose);if(a.filter)ctx.filter='none';ctx.restore();
+ ctx.translate(a.x+ox,a.y+oy+footShift);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;
+ let rigged=!a.dog&&meta?.rig&&this.rigAtlases?.[meta.rig.asset]&&meta.rig.rows?.[row];
+ if(rigged){try{this.drawRig(a,pose,gait,meta,row,frame);}catch{rigged=false;}}
+ if(!rigged){const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);}
+ if(a.look)this.drawEquipment(a,pose);if(a.filter)ctx.filter='none';ctx.restore();
  }
  drawRig(a,pose,gait,meta,row,frame){
  const ctx=this.ctx,rig=meta.rig,config=rig.rows[row],texture=this.rigAtlases[rig.asset],ref=meta.frames[config.reference],refPose=spritePose(ref,pose.height),bounds=ref.bounds;
@@ -335,7 +347,7 @@ export class IsometricWorld {
  ctx.restore();
  }
  labelText(a){return a.hero?a.name:a.waiting?(a.dog?'Pukie · Waiting':a.name+' · With Pukie'):a.sheltered?a.name+' · Sheltered':a.weatherShelter?a.name+' · Under cover':a.name;}
- drawPin(a,on){const ctx=this.ctx;ctx.fillStyle=on?'#f1d285':'#d4bf87';ctx.beginPath();ctx.moveTo(a.x,a.y-103);ctx.lineTo(a.x+4,a.y-97);ctx.lineTo(a.x,a.y-91);ctx.lineTo(a.x-4,a.y-97);ctx.closePath();ctx.fill();}
+ drawPin(a,on){const ctx=this.ctx,h=a.dog?42:a.hero||a.party?102:a.enemy?107:(a.stature||99),apex=a.y-h-22;ctx.save();ctx.fillStyle=on?'#f1d285':'#d4bf87';ctx.strokeStyle='rgba(18,22,16,.5)';ctx.lineWidth=1/Math.max(.6,this.scale);ctx.beginPath();ctx.moveTo(a.x,apex);ctx.lineTo(a.x+5,apex+8);ctx.lineTo(a.x,apex+16);ctx.lineTo(a.x-5,apex+8);ctx.closePath();ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(a.x,apex+16);ctx.lineTo(a.x,apex+22);ctx.stroke();ctx.restore();}
  layoutLabels(){
   const ctx=this.ctx,items=[],pins=[],top=52,bottom=58,near=150;
   const pin=(a,on)=>{if(a?.location)pins.push({a,on});};
@@ -405,7 +417,7 @@ export class IsometricWorld {
  }
  drawMinimap(){if(this.lowQuality&&this._miniSkip){this._miniSkip=false;return;}this._miniSkip=!!this.lowQuality;const c=this.mctx,w=this.mini.width,h=this.mini.height;c.setTransform(1,0,0,1,0,0);if(this.minimapGround){c.globalAlpha=.75;c.drawImage(this.minimapGround,0,0);c.globalAlpha=1;}else{c.clearRect(0,0,w,h);c.globalAlpha=.75;c.drawImage(this.background,0,0,w,h);c.globalAlpha=1;}const sx=w/WORLD_W,sy=h/WORLD_H;for(const a of this.actors){if(!a.location)continue;c.fillStyle='#e3c77e';c.fillRect(a.x*sx-1.5,a.y*sy-1.5,3,3);}c.fillStyle='#e6f4bb';c.beginPath();c.arc(this.player.x*sx,this.player.y*sy,3,0,Math.PI*2);c.fill();c.strokeStyle='#d9d5a677';c.lineWidth=1;c.strokeRect((this.camera.x-this.width/this.scale/2)*sx,(this.camera.y-this.height/this.scale/2)*sy,this.width/this.scale*sx,this.height/this.scale*sy);}
  destroy(){
- if(this.destroyed)return;memories.set(this.id,{x:this.player.x,y:this.player.y,direction:this.player.direction,camera:{...this.camera}});this.destroyed=true;clearTimeout(this.combatTimer);clearTimeout(this.headingTimer);this.combatTimer=null;this.combatFx=null;this.stop();this.listeners.forEach(off=>off());this.resizeObserver?.disconnect();this.intersection?.disconnect();this.keys.clear();this.pointers.clear();
+ if(this.destroyed)return;memories.set(this.memoryKey||this.id,{x:this.player.x,y:this.player.y,direction:this.player.direction,camera:{...this.camera}});this.destroyed=true;clearTimeout(this.combatTimer);clearTimeout(this.headingTimer);this.combatTimer=null;this.combatFx=null;this.stop();this.listeners.forEach(off=>off());this.resizeObserver?.disconnect();this.intersection?.disconnect();this.keys.clear();this.pointers.clear();
  }
 }
 export function mountWorld(root,state,callbacks){if(!root?.querySelector?.('.actors-layer')?.getContext)return null;return new IsometricWorld(root,state,callbacks);}

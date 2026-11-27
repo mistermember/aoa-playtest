@@ -691,3 +691,26 @@ body:has(.play-workspace) .topbar{padding-top:var(--safe-top);height:calc(64px +
 @media(pointer:coarse),(max-width:760px){
   .isometric-world .world-tools{top:auto!important;bottom:48px!important;left:8px;right:8px;flex-direction:row!important;justify-content:flex-end;gap:4px;}
 }
+
+/* v5.0.8: larger-text HUD labels, Save button never clips on narrow phones */
+body.large-text .resource span small,
+body.large-text .resource.supplies small{font-size:11px!important;letter-spacing:.6px!important;margin-bottom:3px!important}
+body.large-text .resource span strong{font-size:18px!important}
+body.large-text .resource em{font-size:11px!important}
+body.large-text .resource.supplies b{font-size:16px!important}
+body.large-text .resource.supplies>span small{display:block!important}
+body.large-text .resource.deadline strong{font-size:18px!important}
+.topbar{overflow:visible;padding-left:max(12px,var(--safe-left));padding-right:max(12px,var(--safe-right));box-sizing:border-box}
+.header-tools{flex-shrink:0}
+.save-button{flex-shrink:0;box-sizing:border-box}
+@media(max-width:1100px){
+ .top-center{display:none}
+ .save-label-full{display:none!important}
+ .save-label-short{display:inline!important}
+}
+@media(max-width:700px){
+ .brand small{display:none}
+ .topbar{gap:8px;padding-left:max(10px,var(--safe-left));padding-right:max(10px,var(--safe-right))}
+ .header-tools{gap:4px}
+ .save-button{padding:8px 9px;min-width:44px}
+}

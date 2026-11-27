@@ -87,3 +87,13 @@ export function listenForNativeImports(restore,notice){
  window.addEventListener('androidfilemessage',e=>notice?.(e.detail));
  window.AgeOfAbundanceImport=text=>restore(text);
 }
+
+export function listenForHardwareBack(handler){
+ const run=()=>!!handler?.();
+ window.addEventListener('androidback',()=>{run();});
+ const App=plugins().App;
+ App?.addListener?.('backButton',()=>{if(!run())App.exitApp?.();});
+ const arm=()=>{try{if(history.state?.aoa!==1)history.pushState({aoa:1},'');}catch{}};
+ arm();
+ window.addEventListener('popstate',()=>{if(run())arm();});
+}

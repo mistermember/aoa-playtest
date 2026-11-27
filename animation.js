@@ -1,7 +1,7 @@
 // Pose calculations use travelled distance, never wall-clock animation timers.
 export function gaitPose(actor,reduced=false){
  const cycle=(((actor.phase||0)%4)+4)%4/4;
- const frame=!actor.moving?0:cycle<.30?0:cycle<.50?1:cycle<.80?2:3;
+ const frame=!actor.moving?0:Math.floor(cycle*4)%4;
  const lift=actor.moving&&!reduced?(actor.dog?.55:.85)*(1-Math.cos(cycle*4*Math.PI))*.5:0;
  return {frame,cycle,lift,sway:actor.moving&&!reduced?Math.sin(cycle*2*Math.PI)*.008:0};
 }

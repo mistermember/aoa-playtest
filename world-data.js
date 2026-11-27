@@ -3,15 +3,8 @@ import {regionalWeather} from './weather.js';
 export const SCENES={
  town:{name:'Par Value',asset:'town-map',entry:[760,790],polygon:[[165,408],[415,325],[510,306],[965,387],[1100,341],[1303,402],[1285,579],[1127,693],[1120,836],[1280,978],[500,990],[388,910],[430,797],[418,733],[325,615],[276,444]],obstacles:[],
  people:[
- {id:'venn',name:'Director Venn',location:'office',sprite:1,x:772,y:389,tag:'COUNTING HOUSE',barks:['A signature is a very expensive thing.','The collectors do not take holidays.']},
- {id:'rusk',name:'Doctor Rusk',location:'clinic',sprite:3,x:391,y:409,tag:'CLINIC',barks:['People before coupons.','The waiting list has a waiting list.']},
- {id:'merchant',name:'Edda, the merchant',location:'market',sprite:2,x:1166,y:550,tag:'TRADE',barks:['Wide spreads. Narrow margins.','Everything is negotiable. Almost.']},
- {id:'mara',name:'Mara Voss',location:'bank',sprite:0,x:1080,y:436,tag:'RUINED BANK',barks:['Someone still pays the electricity.','I read the contract. That was my mistake.']},
- {id:'engineer',name:'Pump engineer',location:'pump',sprite:0,x:454,y:726,tag:'WATER SUPPLY',barks:['The valve is proprietary. So is thirst.','A little working capital would help.']},
  {id:'foreman',name:'Dock foreman',location:'square',sprite:1,x:827,y:826,tag:'WORK & REST',barks:['Another shift. Another day of interest.','Those crates will not collateralize themselves.']},
- {id:'porter',name:'Dock porter',sprite:0,x:624,y:585,route:[[624,585],[938,610],[950,740],[658,725]],barks:['Did they price in the dust?','I heard the bank is still awake.']},
  {id:'citizen',name:'Town resident',sprite:2,x:710,y:596,route:[[710,596],[950,660],[800,850],[552,640]],barks:['I paid yesterday. They say that was interest.','The water tasted better before it had owners.']},
- {id:'nalin',name:'Nalin Ost',location:'wharf',sprite:3,x:520,y:860,tag:'OUTSTANDING WHARF',barks:['The sacks arrived. The payment did not.','I remember every number they asked me to forget.']},
  {id:'widow',name:'Ilya Sen',sprite:2,x:1000,y:800,route:[[1000,800],[860,870],[1120,820]],barks:['My claim is junior. I am not.','The vault still has a light on.']}
  ]},
  interior:{name:'The Directorate',asset:'interior-map',entry:[760,790],polygon:[[165,408],[415,325],[510,306],[965,387],[1100,341],[1303,402],[1285,579],[1127,693],[1120,836],[1280,978],[500,990],[388,910],[430,797],[418,733],[325,615],[276,444]],obstacles:[],
@@ -28,9 +21,23 @@ export const SCENES={
  people:[{id:'father',name:'Your father',location:'clearing',sprite:1,x:791,y:403,tag:'THE BENEFICIAL OWNER',barks:['I needed someone who would keep going.','There is no clean pile of money to return.']},{id:'technician',name:'Settlement technician',sprite:3,x:555,y:557,route:[[555,557],[1007,551],[1045,708],[532,751]],barks:['The obligations never stop arriving.','Every number in here belongs to someone.']},
  {id:'claimclerk',name:'Settlement clerk',location:'antechamber',sprite:2,x:400,y:500,tag:'CLAIMS ANTECHAMBER',barks:['Six files. Six seals. One view already taken.','Mara wrote in the margin. Your father wrote everywhere.']}]},
  vault:{name:'The Ruined Bank',asset:'vault-map',entry:[720,700],polygon:[[390,520],[560,440],[800,400],[1040,450],[1180,560],[1210,720],[1120,850],[760,890],[480,840],[370,700]],obstacles:[],people:[]},
- coreduel:{name:'Central Clearing',asset:'core-duel-map',entry:[770,805],polygon:[[320,400],[500,320],[1040,320],[1240,450],[1260,780],[1040,930],[540,950],[300,750]],obstacles:[],people:[]}
+ coreduel:{name:'Central Clearing',asset:'core-duel-map',entry:[770,805],polygon:[[320,400],[500,320],[1040,320],[1240,450],[1260,780],[1040,930],[540,950],[300,750]],obstacles:[],people:[]},
+ countinghouse:{name:'The Counting House',asset:'counting-house-map',entry:[768,820],polygon:[[220,360],[400,300],[700,280],[900,340],[1000,300],[1180,340],[1280,420],[1400,500],[1480,700],[1400,920],[1100,1000],[500,1000],[280,900],[200,720],[180,500]],obstacles:[],
+ people:[{id:'venn',name:'Director Venn',location:'office',sprite:1,x:780,y:430,tag:'COUNTING HOUSE',barks:['A signature is a very expensive thing.','The collectors do not take holidays.']}]},
+ bidask:{name:'The Bid & Ask',asset:'bid-ask-map',entry:[768,820],polygon:[[300,300],[500,260],[800,250],[1100,280],[1250,360],[1300,500],[1280,680],[1200,780],[1150,900],[1000,980],[600,980],[450,900],[380,780],[300,650],[280,450]],obstacles:[],
+ people:[{id:'merchant',name:'Edda, the merchant',location:'market',sprite:2,x:1180,y:520,tag:'TRADE',barks:['Wide spreads. Narrow margins.','Everything is negotiable. Almost.']},{id:'hawker',name:'Stall keeper',sprite:0,x:420,y:620,route:[[420,620],[700,580],[1000,640],[640,760]],barks:['Bid seven. Ask eleven.','Salt moves before rumour does.']}]},
+ lastremedy:{name:'The Last Remedy',asset:'last-remedy-map',entry:[768,820],polygon:[[240,340],[420,280],[700,260],[1000,280],[1200,300],[1320,400],[1400,550],[1380,750],[1280,900],[1100,1000],[500,1000],[300,900],[220,720],[200,500]],obstacles:[],
+ people:[{id:'rusk',name:'Doctor Rusk',location:'clinic',sprite:3,x:820,y:390,tag:'CLINIC',barks:['People before coupons.','The waiting list has a waiting list.']}]},
+ ruinedbank:{name:'The Ruined Bank',asset:'ruined-bank-map',entry:[768,820],polygon:[[200,380],[360,340],[560,360],[700,340],[900,380],[1080,360],[1180,400],[1300,480],[1400,600],[1450,800],[1400,1000],[400,1010],[200,920],[140,700],[160,500]],obstacles:[],
+ people:[{id:'mara',name:'Mara Voss',location:'bank',sprite:0,x:900,y:460,tag:'RUINED BANK',barks:['Someone still pays the electricity.','I read the contract. That was my mistake.']}]},
+ municipalpump:{name:'The Municipal Pump',asset:'municipal-pump-map',entry:[768,860],polygon:[[180,200],[400,160],[700,150],[1100,160],[1300,250],[1380,400],[1400,600],[1350,850],[1280,1000],[600,1010],[480,900],[400,700],[200,550],[160,350]],obstacles:[[[640,400],[860,400],[930,500],[860,610],[640,610],[570,500]]],
+ people:[{id:'engineer',name:'Pump engineer',location:'pump',sprite:0,x:1000,y:560,tag:'WATER SUPPLY',barks:['The valve is proprietary. So is thirst.','A little working capital would help.']}]},
+ outstandingwharf:{name:'The Outstanding Wharf',asset:'outstanding-wharf-map',entry:[768,820],polygon:[[400,360],[640,320],[780,340],[800,400],[1000,420],[1200,450],[1280,560],[1300,700],[1200,850],[1000,1000],[500,1000],[400,850],[300,700],[280,520],[320,420]],obstacles:[],
+ people:[{id:'nalin',name:'Nalin Ost',location:'wharf',sprite:3,x:560,y:420,tag:'OUTSTANDING WHARF',barks:['The sacks arrived. The payment did not.','I remember every number they asked me to forget.']},{id:'porter',name:'Dock porter',sprite:0,x:900,y:700,route:[[900,700],[700,620],[1000,580],[1100,740]],barks:['Did they price in the dust?','I heard the bank is still awake.']}]},
+
 };
-export function sceneId(location){if(['square','office','market','clinic','bank','pump','wharf'].includes(location))return 'town';if(['directorate','granary','archive'].includes(location))return 'interior';if(['river','levee','quay'].includes(location))return 'river';if(['reserve','ward','orchard'].includes(location))return 'garden';return 'core';}
+const LOCATION_SCENES={square:'town',office:'countinghouse',market:'bidask',clinic:'lastremedy',bank:'ruinedbank',pump:'municipalpump',wharf:'outstandingwharf',directorate:'interior',granary:'interior',archive:'interior',river:'river',levee:'river',quay:'river',reserve:'garden',ward:'garden',orchard:'garden',clearing:'core',antechamber:'core'};
+export function sceneId(location){return LOCATION_SCENES[location]||'core';}
 // Bank fights belong on the Par Value streets, not the Central Clearing chamber. Core fights stay in the Core. New plates are still needed for a dedicated vault arena, an Interior district, and a purpose-built Core duel (see ART-NEEDED.txt).
 export function combatSceneId(state){const kind=state.combat?.kind;if(kind==='core')return 'coreduel';if(kind==='bank')return 'vault';return sceneId(state.location);}
 export function combatStaging(kind){

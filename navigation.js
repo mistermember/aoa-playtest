@@ -72,3 +72,21 @@ export function separateCrowd(list,grid,radius=46){
   }
  }
 }
+export function blockActors(grid,blockers,actor,radius=26){
+ const next={cols:grid.cols,rows:grid.rows,cell:grid.cell,walk:grid.walk.slice()};
+ const r2=radius*radius,cell=grid.cell;
+ for(const b of blockers){
+  if(!b||b===actor)continue;
+  const x0=Math.max(0,Math.floor((b.x-radius)/cell)),x1=Math.min(grid.cols-1,Math.floor((b.x+radius)/cell));
+  const y0=Math.max(0,Math.floor((b.y-radius)/cell)),y1=Math.min(grid.rows-1,Math.floor((b.y+radius)/cell));
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+   const cx=(x+.5)*cell,cy=(y+.5)*cell;
+   if((cx-b.x)**2+(cy-b.y)**2<=r2)next.walk[y*grid.cols+x]=0;
+  }
+ }
+ if(actor){
+  const ax=Math.floor(actor.x/cell),ay=Math.floor(actor.y/cell);
+  if(ax>=0&&ay>=0&&ax<grid.cols&&ay<grid.rows)next.walk[ay*grid.cols+ax]=grid.walk[ay*grid.cols+ax];
+ }
+ return next;
+}
