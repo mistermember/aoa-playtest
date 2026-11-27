@@ -756,3 +756,9 @@ body.large-text .nav-full,
 body.large-text .nav-short{font-size:16px!important;}
 body.large-text .turn-tag{font-size:12px!important;}
 body.large-text.android-native .nav-tabs button{font-size:15px!important;}
+/* v5.0.8 modal breathing room: guarantee balanced top & bottom viewport margins */
+.modal-backdrop{padding:32px 24px}
+.modal{max-height:calc(100dvh - 64px)}
+.modal-inner{padding-bottom:48px}
+@media(max-width:760px){.modal-backdrop{padding:16px 12px}.modal{max-height:calc(100dvh - 32px)}}
+@media(max-height:540px){.modal-backdrop{padding:16px 12px}.modal{max-height:calc(100dvh - 32px)}}
