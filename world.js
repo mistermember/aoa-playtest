@@ -286,7 +286,7 @@ export class IsometricWorld {
  const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+1.2;
  ctx.save();
  ctx.translate(a.x+ox,a.y+oy+footShift);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;
- let rigged=!a.dog&&meta?.rig&&this.rigAtlases?.[meta.rig.asset]&&meta.rig.rows?.[row];
+ let rigged=false;
  if(rigged){try{this.drawRig(a,pose,gait,meta,row,frame);}catch{rigged=false;}}
  if(!rigged){const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);}
  if(a.look)this.drawEquipment(a,pose);if(a.filter)ctx.filter='none';ctx.restore();
