@@ -16,13 +16,14 @@ export function idleSeed(actor){
 export function ensureIdle(actor){
  if(!actor.idle){
   const seed=idleSeed(actor);
-  actor.idle={col:0,mode:'stand',t:0,next:4+seed*5,glanceDir:null,plantedFor:0,roam:null,seed,clock:seed*3.4,bounce:0,bob:0,nextWag:2.5+seed*2.5,nextSniff:5+seed*5,sitAfter:8+seed*4,nextRoam:14+seed*8,perkT:0};
+  actor.idle={col:0,mode:'stand',t:0,next:2+seed*2,glanceDir:null,plantedFor:0,roam:null,seed,clock:seed*3.4,bounce:0,bob:0,nextWag:1.2+seed*1.2,nextSniff:2.8+seed*2.2,sitAfter:6+seed*2.5,nextRoam:10+seed*5,perkT:0};
  }
  return actor.idle;
 }
 export function resetIdle(actor){
  const idle=ensureIdle(actor);
  idle.col=0;idle.mode='stand';idle.t=0;idle.glanceDir=null;idle.plantedFor=0;idle.bounce=0;idle.bob=0;idle.perkT=0;
+ idle.next=2+(idle.seed||0)*2;idle.nextWag=1.2+(idle.seed||0)*1.2;idle.nextSniff=2.8+(idle.seed||0)*2.2;idle.nextRoam=10+(idle.seed||0)*5;
  if(idle.roam)idle.roam=null;
 }
 export function breathScale(time,seed){
@@ -43,27 +44,28 @@ export function stepIdle(actor,dt,opts={}){
  return stepNpcIdle(actor,dt,idle);
 }
 function stepHumanIdle(actor,dt,idle,hasSheet){
+ const hold=()=>1.8+Math.random()*.8,cadence=()=>2.8+Math.random()*2.4;
  if(!hasSheet){
   idle.col=2;
   if(idle.mode==='stand'){
    idle.glanceDir=null;
-   if(idle.t>=idle.next){idle.mode='glance';idle.t=0;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=2+Math.random();}
-  }else if(idle.t>=idle.next){idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=4+Math.random()*5;}
+   if(idle.t>=idle.next){idle.mode='glance';idle.t=0;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=hold();}
+  }else if(idle.t>=idle.next){idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=cadence();}
   return idle;
  }
  if(idle.mode==='stand'){
   idle.col=0;idle.glanceDir=null;
   if(idle.t>=idle.next){
    const r=Math.random();
-   const act=r<.28?'look':r<.52?'gesture1':r<.76?'gesture2':'glance';
-   idle.mode=act;idle.t=0;
-   if(act==='look'){idle.col=1;idle.next=1.5+Math.random()*.7;}
-   else if(act==='gesture1'){idle.col=2;idle.next=1.4+Math.random()*.6;}
-   else if(act==='gesture2'){idle.col=3;idle.next=1.6+Math.random()*.8;}
-   else{idle.col=Math.random()<.5?0:1;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=2+Math.random();}
+   const act=r<.25?'look':r<.57?'gesture1':r<.85?'gesture2':'glance';
+   idle.mode=act;idle.t=0;idle.next=hold();
+   if(act==='look')idle.col=1;
+   else if(act==='gesture1')idle.col=2;
+   else if(act==='gesture2')idle.col=3;
+   else{idle.col=Math.random()<.5?0:1;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;}
   }
  }else if(idle.t>=idle.next){
-  idle.mode='stand';idle.col=0;idle.glanceDir=null;idle.t=0;idle.next=4+Math.random()*5;
+  idle.mode='stand';idle.col=0;idle.glanceDir=null;idle.t=0;idle.next=cadence();
  }
  return idle;
 }
@@ -71,8 +73,8 @@ function stepNpcIdle(actor,dt,idle){
  idle.col=2;
  if(idle.mode==='stand'){
   idle.glanceDir=null;
-  if(idle.t>=idle.next){idle.mode='glance';idle.t=0;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=1.6+Math.random()*1.2;}
- }else if(idle.t>=idle.next){idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=6+Math.random()*7;}
+  if(idle.t>=idle.next){idle.mode='glance';idle.t=0;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=1.8+Math.random()*.8;}
+ }else if(idle.t>=idle.next){idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=4+Math.random()*5;}
  return idle;
 }
 function stepDogIdle(actor,dt,opts,idle){
@@ -85,12 +87,12 @@ function stepDogIdle(actor,dt,opts,idle){
  }
  if(idle.mode==='wag'){
   const hz=4.5;idle.col=Math.floor(idle.t*hz)%2;idle.bounce=Math.abs(Math.sin(idle.t*hz*Math.PI))*1.6;
-  if(idle.t>=1.4){idle.mode='stand';idle.col=0;idle.t=0;idle.bounce=0;idle.nextWag=2.5+Math.random()*2.5;}
+  if(idle.t>=1.5){idle.mode='stand';idle.col=0;idle.t=0;idle.bounce=0;idle.nextWag=2+Math.random()*2;}
   return idle;
  }
  if(idle.mode==='sniff'){
   idle.col=2;idle.bob=Math.sin(idle.t*10)*1.1;
-  if(idle.t>=idle.next){idle.mode='stand';idle.col=0;idle.t=0;idle.bob=0;idle.nextSniff=5+Math.random()*5;}
+  if(idle.t>=idle.next){idle.mode='stand';idle.col=0;idle.t=0;idle.bob=0;idle.nextSniff=4+Math.random()*3.5;}
   return idle;
  }
  if(idle.mode==='sit'){
@@ -103,7 +105,7 @@ function stepDogIdle(actor,dt,opts,idle){
  idle.nextWag=(idle.nextWag??2.5)-dt;
  idle.nextSniff=(idle.nextSniff??5)-dt;
  if(idle.nextWag<=0){idle.mode='wag';idle.t=0;return idle;}
- if(idle.nextSniff<=0){idle.mode='sniff';idle.t=0;idle.next=2.2+Math.random();return idle;}
+ if(idle.nextSniff<=0){idle.mode='sniff';idle.t=0;idle.next=2.4+Math.random()*.8;return idle;}
  if(opts.nearLeader!==false&&idle.plantedFor>=(idle.sitAfter||10)){idle.mode='sit';idle.t=0;idle.col=3;}
  return idle;
 }

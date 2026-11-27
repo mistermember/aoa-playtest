@@ -173,7 +173,7 @@ export class IsometricWorld {
  faceEachOther(a,b){const dx=b.x-a.x,dy=b.y-a.y;a.direction=dy>=0?(dx>=0?0:1):(dx<0?2:3);b.direction=(a.direction+2)%4;}
  stop(){if(this.raf)cancelAnimationFrame(this.raf);this.raf=0;this.last=0;}
  wake(){if(this.destroyed||!this.ready||!this.visible||this.suspended||this.paused||this.raf)return;this.last=0;this.raf=requestAnimationFrame(t=>this.frame(t));}
- frame(t){this.raf=0;if(this.destroyed||!this.visible||this.suspended||this.paused)return;const elapsed=this.last?t-this.last:16.7;const cap=this.economy?24:this.reduced?30:60;if(elapsed>=1000/cap-1){if(elapsed>22)this.slowFrames=(this.slowFrames||0)+1;else if(elapsed<17)this.slowFrames=Math.max(0,(this.slowFrames||0)-2);this.lowQuality=!!(this.economy||this.reduced||(this.slowFrames||0)>=2);if((this.slowFrames||0)>=2&&this.dprCap>2&&!this.economy){this.dprCap=Math.max(2,+(this.dprCap-0.5).toFixed(2));this.slowFrames=0;this.resize();}this.last=t;this.update(Math.min(elapsed/1000,.08));if(this.destroyed)return;this.draw();if(this.state.combat&&!this.combatFx)return;if((this.reduced||this.economy)&&!this.player.path.length&&!this.keys.size&&!this.partyActors().some(a=>a.path.length)&&!this.combatFx)return;}this.raf=requestAnimationFrame(n=>this.frame(n));}
+ frame(t){this.raf=0;if(this.destroyed||!this.visible||this.suspended||this.paused)return;const elapsed=this.last?t-this.last:16.7;const standing=!this.player.path.length&&!this.keys.size&&!this.partyActors().some(a=>a.path.length)&&!this.combatFx;const cap=this.reduced?30:this.economy?(standing?15:24):60;if(elapsed>=1000/cap-1){if(elapsed>22)this.slowFrames=(this.slowFrames||0)+1;else if(elapsed<17)this.slowFrames=Math.max(0,(this.slowFrames||0)-2);this.lowQuality=!!(this.economy||this.reduced||(this.slowFrames||0)>=2);if((this.slowFrames||0)>=2&&this.dprCap>2&&!this.economy){this.dprCap=Math.max(2,+(this.dprCap-0.5).toFixed(2));this.slowFrames=0;this.resize();}this.last=t;this.update(Math.min(elapsed/1000,.08));if(this.destroyed)return;this.draw();if(this.state.combat&&!this.combatFx)return;if(this.reduced&&standing)return;}this.raf=requestAnimationFrame(n=>this.frame(n));}
  update(dt){
  this.time+=dt;this.updateDust(dt);
  if(this.combatFx){this.combatFx.age+=dt;this.updateCombat();return;}
@@ -206,7 +206,7 @@ export class IsometricWorld {
    if(r.stage==='go'||r.stage==='back'){
     if(!dog.path?.length){
      if(r.stage==='go'){r.stage='sniff';r.t=0;idle.mode='sniff';idle.t=0;idle.next=2.5;dog.planted=true;dog.moving=false;dog.velocity=0;}
-     else{idle.roam=null;idle.mode='stand';idle.col=0;idle.t=0;idle.plantedFor=0;idle.nextRoam=14+Math.random()*8;}
+     else{idle.roam=null;idle.mode='stand';idle.col=0;idle.t=0;idle.plantedFor=0;idle.nextRoam=11+Math.random()*6;}
     }else{this.advanceActor(dog,dt);resolveSeparation(dog,[this.player,...this.actors,...this.partyActors().filter(a=>a!==dog)],this.grid,22);}
     return true;
    }
@@ -226,19 +226,19 @@ export class IsometricWorld {
    }
    return true;
   }
-  idle.nextRoam=(idle.nextRoam??(14+(idle.seed||0)*8))-dt;
+  idle.nextRoam=(idle.nextRoam??(10+(idle.seed||0)*5))-dt;
   if(idle.nextRoam<=0&&leader.planted){
    const target=this.pickDogSniffPoint(dog,leader);
    if(target){
     const path=findPath(this.grid,dog,target,70);
     if(path?.length){
      if(idle.mode==='sit')idle.mode='stand';
-     idle.roam={stage:'go',target};idle.col=0;dog.path=path;idle.nextRoam=14+Math.random()*8;
+     idle.roam={stage:'go',target};idle.col=0;dog.path=path;idle.nextRoam=11+Math.random()*6;
      this.advanceActor(dog,dt);resolveSeparation(dog,[this.player,...this.actors,...this.partyActors().filter(a=>a!==dog)],this.grid,22);
      return true;
     }
    }
-   idle.nextRoam=8+Math.random()*8;
+   idle.nextRoam=11+Math.random()*6;
   }
   return false;
  }
