@@ -1,18 +1,18 @@
-import {gaitPose,spritePose,boneAffine,kneeFor,footTargets,idleAtlasFor,ensureIdle,stepIdle,gestureFrame} from './animation.js';
+import {gaitPose,spritePose,boneAffine,kneeFor,footTargets,idleAtlasFor,ensureIdle,stepIdle,gestureFrame} from './animation.js?v=5.0.9c';
 import {weatherAt,regionalWeather,hoodRaised} from './weather.js';
 import {equipmentAtlas} from './equipment.js';
 import {readPreferences,savePreference} from './preferences.js';
-import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,coastTarget,resolveSeparation,separateCrowd,blockActors,facingFrom} from './navigation.js';
+import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,coastTarget,resolveSeparation,separateCrowd,blockActors,facingFrom} from './navigation.js?v=5.0.9c';
 import {SCENES,sceneId,combatSceneId,combatStaging,makeActors} from './world-data.js';
 
 const imageCache=new Map(),memories=new Map();
 let metadataPromise;
 export function resetWorldMemory(){memories.clear();}
-// v5.0.9b: map backgrounds are 3072x2048 now; keep only the two most recent decoded maps alive (low-RAM phones).
+// v5.0.9c: map backgrounds are 3072x2048 now; keep only the two most recent decoded maps alive (low-RAM phones).
 const recentMaps=[];
 function rememberMap(name){if(!/-map$/.test(name))return;const i=recentMaps.indexOf(name);if(i>=0)recentMaps.splice(i,1);recentMaps.push(name);while(recentMaps.length>2)imageCache.delete(recentMaps.shift());}
-function loadImage(name){rememberMap(name);if(!imageCache.has(name)){imageCache.set(name,new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>{imageCache.delete(name);reject(new Error(`Could not load ${name}`));};i.src=`assets/${name}.webp?v=5.0.9b`;}));}return imageCache.get(name);}
-function loadMetadata(){return metadataPromise??=fetch('assets/sprite-frames.json?v=5.0.9b').then(r=>{if(!r.ok)throw Error('Sprite data unavailable');return r.json();}).catch(e=>{metadataPromise=null;throw e;});}
+function loadImage(name){rememberMap(name);if(!imageCache.has(name)){imageCache.set(name,new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>{imageCache.delete(name);reject(new Error(`Could not load ${name}`));};i.src=`assets/${name}.webp?v=5.0.9c`;}));}return imageCache.get(name);}
+function loadMetadata(){return metadataPromise??=fetch('assets/sprite-frames.json?v=5.0.9c').then(r=>{if(!r.ok)throw Error('Sprite data unavailable');return r.json();}).catch(e=>{metadataPromise=null;throw e;});}
 function annotateFootPads(meta,atlases){
  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
  for(const [name,image] of Object.entries(atlases)){
@@ -42,9 +42,9 @@ export class IsometricWorld {
  if(typeof location!=='undefined'&&/[?&]qa=1\b/.test(location.search||''))globalThis.__aoaWorld=this; // QA hook (only with ?qa=1)
  this.root=root;this.canvas=root.querySelector('.actors-layer');this.back=root.querySelector('.terrain-layer');this.ctx=this.canvas.getContext('2d');this.bctx=this.back.getContext('2d',{alpha:false});this.mini=root.querySelector('.world-minimap');this.mctx=this.mini?.getContext('2d');
  this.weather=weatherAt(state);this.atmosphere=state.combat&&!this.weather.exposed?'clear':regionalWeather(state);this.state=state;this.callbacks=callbacks;this.id=state.combat?combatSceneId(state):sceneId(state.location);this.scene=SCENES[this.id];this.grid=buildGrid(this.scene.polygon,this.scene.obstacles);this.actors=makeActors(this.scene,state);this.listeners=[];this.raf=0;this.destroyed=false;this.paused=false;this.visible=true;this.suspended=!!document.hidden;this.ready=false;this.last=0;this.time=0;this.cameraDirty=true;this.hover=null;this.target=null;this.destination=null;this.showNames=readPreferences().names;this.combatTimer=null;this.keys=new Set();this.follow=true;this.reduced=document.body.classList.contains('reduce-motion')||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;this.economy=readPreferences().battery;this.pointers=new Map();this.pinch=null;this.social=null;this.nextSocial=8;this.combatFx=null;this.trail=[];this.puffs=[];this.motes=[];
- this.memoryKey=state.combat?'combat:'+this.id:state.location;
+ this.memoryKey=state.combat?'combat:'+this.id:state.location;this.key=worldKey(state);
  const old=memories.get(this.memoryKey),entry=this.scene.entry;
- this.player={id:'player',name:state.lead==='berkay'?'Berkay':'Uygar',person:state.lead,atlas:equipmentAtlas(state,state.lead),look:state.gear?.[state.lead],x:old?.x??entry[0],y:old?.y??entry[1],direction:old?.direction??2,path:[],speed:120,acceleration:857,phase:0,hero:true,moving:false};
+ this.player={id:'player',name:state.lead==='berkay'?'Berkay':'Uygar',person:state.lead,atlas:equipmentAtlas(state,state.lead),look:state.gear?.[state.lead],x:old?.x??entry[0],y:old?.y??entry[1],direction:old?.direction??2,path:[],speed:96,acceleration:686,phase:0,hero:true,moving:false};
  this.snap(this.player);
  this.camera={x:old?.camera?.x??this.player.x,y:old?.camera?.y??this.player.y-130,zoom:old?.camera?.zoom??1.12};
  this.createParty();
@@ -52,7 +52,7 @@ export class IsometricWorld {
  this.actors.forEach(a=>this.snap(a));separateCrowd(this.actors,this.grid,46);this.player.speed*=this.weather.speed;this.partyActors().forEach(a=>a.speed*=this.weather.speed);
  this.bind();this.resize();this.root.querySelector('[data-world="names"]')?.setAttribute('aria-pressed',String(this.showNames));
  this.headingTimer=setTimeout(()=>{if(!this.destroyed)this.root.querySelector('.world-heading')?.classList.add('is-compact');},3400);
- const leadAtlas=equipmentAtlas(state,state.lead);const brotherAtlas=this.companion?equipmentAtlas(state,this.companion.person):null;const need=[leadAtlas,'npc-walk'];if(brotherAtlas&&!need.includes(brotherAtlas))need.push(brotherAtlas);if(this.dog)need.push('pukie-walk');if(this.actors.some(a=>a.atlas==='npc-workers'))need.push('npc-workers');for(const walk of [...need]){const idle=idleAtlasFor(walk);if(idle&&!need.includes(idle))need.push(idle);}Promise.all([loadImage(this.scene.asset),loadMetadata(),...need.map(loadImage)]).then(async ([background,meta,...loaded])=>{if(this.destroyed)return;const atlases={};need.forEach((name,i)=>{atlases[name]=loaded[i];});const rigAtlases={};await Promise.all(need.map(async name=>{const rig=meta[name]?.rig;if(rig)rigAtlases[rig.asset]=await loadImage(rig.asset);}));if(this.destroyed)return;annotateFootPads(meta,atlases);Object.assign(this,{background,hero:atlases[leadAtlas],npcs:atlases['npc-walk'],workers:atlases['npc-workers']||atlases['npc-walk'],rigAtlases,atlases,meta,ready:true});this.bakeOccluders();this.bakeMinimapGround();this.weatherTiles=new Map();root.querySelector('.world-loading')?.remove();this.cameraDirty=true;this.draw();this.wake();}).catch(()=>{if(!this.destroyed){const el=root.querySelector('.world-loading');if(el)el.textContent='Artwork could not load. Refresh to retry. Campaign actions below remain available.';}});
+ const leadAtlas=equipmentAtlas(state,state.lead);const brotherAtlas=this.companion?equipmentAtlas(state,this.companion.person):null;const need=[leadAtlas,'npc-walk'];if(brotherAtlas&&!need.includes(brotherAtlas))need.push(brotherAtlas);if(this.dog)need.push('pukie-walk');if(this.actors.some(a=>a.atlas==='npc-workers'))need.push('npc-workers');for(const walk of [...need]){const idle=idleAtlasFor(walk);if(idle&&!need.includes(idle))need.push(idle);}Promise.all([loadImage(this.scene.asset),loadMetadata(),...need.map(loadImage)]).then(async ([background,meta,...loaded])=>{if(this.destroyed)return;await background.decode?.().catch(()=>{});if(this.destroyed)return;const atlases={};need.forEach((name,i)=>{atlases[name]=loaded[i];});const rigAtlases={};await Promise.all(need.map(async name=>{const rig=meta[name]?.rig;if(rig)rigAtlases[rig.asset]=await loadImage(rig.asset);}));if(this.destroyed)return;annotateFootPads(meta,atlases);Object.assign(this,{background,hero:atlases[leadAtlas],npcs:atlases['npc-walk'],workers:atlases['npc-workers']||atlases['npc-walk'],rigAtlases,atlases,meta,ready:true});this.camera.zoom=Math.min(this.camera.zoom,this.maxZoom());this.scale=this.baseScale*this.camera.zoom;this.clampCamera();this.bakeOccluders();this.bakeMinimapGround();this.weatherTiles=new Map();root.querySelector('.world-loading')?.remove();this.cameraDirty=true;this.draw();this.wake();}).catch(()=>{if(!this.destroyed){const el=root.querySelector('.world-loading');if(el)el.textContent='Artwork could not load. Refresh to retry. Campaign actions below remain available.';}});
  }
  createParty(){
  // The brother is the dog's guardian; Pukie never accepts player movement orders.
@@ -63,9 +63,9 @@ export class IsometricWorld {
  if(!waiting&&!this.trail.length){for(let i=24;i>=0;i--)this.trail.push({x:x,y:y+i*10});}
  const brotherSlot=waiting?{x:x-65,y:y+135}:this.trailPoint(70,this.player,-1);
  const dogSlot=waiting?{x:x-20,y:y+175}:this.trailPoint(48,this.player,1);
- this.companion={id:'brother',name:brotherName,person:brotherName.toLowerCase(),atlas:equipmentAtlas(this.state,brotherName.toLowerCase()),look:this.state.gear?.[brotherName.toLowerCase()],x:brotherSlot.x,y:brotherSlot.y,path:[],speed:128,baseSpeed:128,acceleration:914,direction:2,phase:0,moving:false,followWait:0,party:true,waiting};
+ this.companion={id:'brother',name:brotherName,person:brotherName.toLowerCase(),atlas:equipmentAtlas(this.state,brotherName.toLowerCase()),look:this.state.gear?.[brotherName.toLowerCase()],x:brotherSlot.x,y:brotherSlot.y,path:[],speed:102,baseSpeed:102,acceleration:731,direction:2,phase:0,moving:false,followWait:0,party:true,waiting};
  this.snap(this.companion);
- this.dog={id:'pukie',name:'Pukie',atlas:'pukie-walk',x:dogSlot.x,y:dogSlot.y,path:[],speed:142,baseSpeed:142,acceleration:1014,direction:2,phase:0,moving:false,followWait:0,party:true,dog:true,stature:40,waiting};
+ this.dog={id:'pukie',name:'Pukie',atlas:'pukie-walk',x:dogSlot.x,y:dogSlot.y,path:[],speed:114,baseSpeed:114,acceleration:811,direction:2,phase:0,moving:false,followWait:0,party:true,dog:true,stature:40,waiting};
  this.snap(this.dog);resolveSeparation(this.dog,[this.companion,this.player],this.grid,30);
  }
  partyActors(){return [this.companion,this.dog].filter(Boolean);}
@@ -73,7 +73,7 @@ export class IsometricWorld {
  if(actor.waiting||actor.sheltered||this.target?.actor===actor)return;
  if(actor.held)return;
  if(actor===this.companion&&this.quirk&&(this.quirk.stage==='approach'||this.quirk.stage==='step')&&leader.planted){this.advanceActor(actor,dt);return;}
- // v5.0.9b: a planted brother holds his ground while Uygar walks up to him (instead of shuffling off to the trail point).
+ // v5.0.9c: a planted brother holds his ground while Uygar walks up to him (instead of shuffling off to the trail point).
  if(actor===this.companion){const g=distance(actor,leader),closing=g<(actor.lastGap??1e9)-.05;actor.lastGap=g;if(closing&&g<180&&actor.planted&&!actor.path?.length){actor.velocity=0;actor.moving=false;this.advanceActor(actor,dt);return;}}
  if(actor.idle?.mode==='quirk'&&(leader.planted||this.quirk?.kind==='holdup')){actor.path=[];actor.velocity=0;actor.moving=false;actor.planted=true;this.advanceActor(actor,dt);return;}
  if(actor.dog&&this.updateDogRoam(actor,leader,dt))return;
@@ -150,7 +150,7 @@ export class IsometricWorld {
  }
  pointerMove(e){
  if(this.pointers.has(e.pointerId))this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(this.pinch&&this.pointers.size>=2){const [a,b]=[...this.pointers.values()],r=this.canvas.getBoundingClientRect();this.camera.zoom=clamp(this.pinch.zoom*Math.hypot(a.x-b.x,a.y-b.y)/this.pinch.distance,.82,2.1);this.scale=this.baseScale*this.camera.zoom;this.camera.x=this.pinch.anchor.x-((a.x+b.x)/2-r.left-this.width/2)/this.scale;this.camera.y=this.pinch.anchor.y-((a.y+b.y)/2-r.top-this.height/2)/this.scale;this.clampCamera();this.cameraDirty=true;this.draw();return;}
+ if(this.pinch&&this.pointers.size>=2){const [a,b]=[...this.pointers.values()],r=this.canvas.getBoundingClientRect();this.camera.zoom=clamp(this.pinch.zoom*Math.hypot(a.x-b.x,a.y-b.y)/this.pinch.distance,.82,this.maxZoom());this.scale=this.baseScale*this.camera.zoom;this.camera.x=this.pinch.anchor.x-((a.x+b.x)/2-r.left-this.width/2)/this.scale;this.camera.y=this.pinch.anchor.y-((a.y+b.y)/2-r.top-this.height/2)/this.scale;this.clampCamera();this.cameraDirty=true;this.draw();return;}
  const p=this.eventPoint(e);if(this.drag){const dx=e.clientX-this.drag.x,dy=e.clientY-this.drag.y;if(Math.hypot(dx,dy)>7){this.drag.moved=true;this.follow=false;this.camera.x=this.drag.cx-dx/this.scale;this.camera.y=this.drag.cy-dy/this.scale;this.clampCamera();this.cameraDirty=true;this.draw();}}
  this.hover=this.pickActor(p);this.canvas.style.cursor=this.drag?.moved?'grabbing':this.hover?'pointer':isWalkable(this.grid,p.x,p.y)?'crosshair':'not-allowed';if(this.paused||this.state.combat||this.economy)this.draw();
  }
@@ -160,11 +160,14 @@ export class IsometricWorld {
  this.drag=null;if(!drag||drag.moved||drag.button===2)return;this.click(this.eventPoint(e));
  }
  setSuspended(suspended){this.suspended=suspended;this.keys.clear();this.pointers.clear();this.pinch=null;this.drag=null;if(suspended){this.finishCombat();this.stop();}else this.wake();}
- resize(){if(this.destroyed)return;const r=this.root.getBoundingClientRect();this.width=Math.max(1,r.width);this.height=Math.max(1,r.height);this.dprCap=this.dprCap||(this.economy?1.5:3);this.dpr=Math.min(window.devicePixelRatio||1,this.dprCap);for(const c of [this.canvas,this.back]){c.width=Math.round(this.width*this.dpr);c.height=Math.round(this.height*this.dpr);c.style.width=this.width+'px';c.style.height=this.height+'px';}this.baseScale=Math.max(this.width/WORLD_W,this.height/WORLD_H);this.scale=this.baseScale*this.camera.zoom;this.clampCamera();this.cameraDirty=true;if(this.ready)this.draw();}
+ // v5.0.9c: never zoom past the map art's native texel density (3072px over a 1536-unit world = 2 texels/unit),
+ // allowing ~15% upscale; on huge/retina viewports this stops the camera from magnifying blurry pixels.
+ maxZoom(){const tex=Math.max(1,((this.background?.naturalWidth||this.background?.width||WORLD_W*2))/WORLD_W);const phys=(this.baseScale||1)*Math.max(1,window.devicePixelRatio||1);return clamp(tex*1.15/phys,1.25,2.1);}
+ resize(){if(this.destroyed)return;const r=this.root.getBoundingClientRect();this.width=Math.max(1,r.width);this.height=Math.max(1,r.height);this.dprCap=this.dprCap||(this.economy?1.5:2);this.dpr=Math.min(window.devicePixelRatio||1,this.dprCap);for(const c of [this.canvas,this.back]){c.width=Math.round(this.width*this.dpr);c.height=Math.round(this.height*this.dpr);c.style.width=this.width+'px';c.style.height=this.height+'px';}this.baseScale=Math.max(this.width/WORLD_W,this.height/WORLD_H);if(this.background)this.camera.zoom=Math.min(this.camera.zoom,this.maxZoom());this.scale=this.baseScale*this.camera.zoom;this.clampCamera();this.cameraDirty=true;if(this.ready)this.draw();}
  clampCamera(){this.scale=this.baseScale*this.camera.zoom;const halfW=this.width/this.scale/2,halfH=this.height/this.scale/2;this.camera.x=halfW>WORLD_W/2?WORLD_W/2:clamp(this.camera.x,halfW,WORLD_W-halfW);this.camera.y=halfH>WORLD_H/2?WORLD_H/2:clamp(this.camera.y,halfH,WORLD_H-halfH);}
  eventPoint(e){const r=this.canvas.getBoundingClientRect();return{x:(e.clientX-r.left-this.width/2)/this.scale+this.camera.x,y:(e.clientY-r.top-this.height/2)/this.scale+this.camera.y};}
  screenPoint(p){return{x:(p.x-this.camera.x)*this.scale+this.width/2,y:(p.y-this.camera.y)*this.scale+this.height/2};}
- zoom(delta){this.camera.zoom=clamp(this.camera.zoom+delta,.82,2.1);this.clampCamera();this.cameraDirty=true;this.draw();}
+ zoom(delta){this.camera.zoom=clamp(this.camera.zoom+delta,.82,this.maxZoom());this.clampCamera();this.cameraDirty=true;this.draw();}
  center(){this.follow=true;this.camera.x=this.player.x;this.camera.y=this.player.y-100;this.clampCamera();this.cameraDirty=true;this.draw();this.canvas.focus({preventScroll:true});}
  toggleNames(){this.showNames=!this.showNames;savePreference('names',this.showNames);this.root.querySelector('[data-world="names"]')?.setAttribute('aria-pressed',String(this.showNames));this.draw();}
  togglePause(){if(this.state.combat||this.combatFx)return;this.paused=!this.paused;this.root.classList.toggle('world-paused',this.paused);this.root.querySelector('[data-world="pause"]')?.setAttribute('aria-pressed',String(this.paused));if(this.paused){this.stop();this.draw();}else this.wake();}
@@ -216,7 +219,7 @@ export class IsometricWorld {
  this.stepLivingWorld(dt);
  if(this.follow&&!this.drag){const targetX=this.player.x,targetY=this.player.y-85,dx=targetX-this.camera.x,dy=targetY-this.camera.y;const deadX=Math.max(48,(this.width/this.scale)*0.20),deadY=Math.max(36,(this.height/this.scale)*0.16);let mx=0,my=0;if(Math.abs(dx)>deadX)mx=dx-Math.sign(dx)*deadX;if(Math.abs(dy)>deadY)my=dy-Math.sign(dy)*deadY;if(mx||my){this.camera.x+=mx*Math.min(1,dt*4);this.camera.y+=my*Math.min(1,dt*4);this.clampCamera();this.cameraDirty=true;}}
  }
- // v5.0.9b: Berkay's two quirks. (1) Personal space: when Uygar steps within ~62 units of a planted Berkay he raises a
+ // v5.0.9c: Berkay's two quirks. (1) Personal space: when Uygar steps within ~62 units of a planted Berkay he raises a
  // palm ("hold up"), then takes one small step back; 12 s cooldown. (2) Every ~20-35 s of a calm, idle party with Pukie
  // close by, Berkay picks Pukie up, hugs him for ~2 s and sets him down beside his boots. Only one Pukie is ever drawn
  // (the ground dog is hidden while held) and the hug cancels the instant Uygar moves, interacts or anything starts.
@@ -383,7 +386,7 @@ export class IsometricWorld {
  transform(ctx){ctx.setTransform(this.dpr*this.scale,0,0,this.dpr*this.scale,this.dpr*(this.width/2-this.camera.x*this.scale),this.dpr*(this.height/2-this.camera.y*this.scale));}
  draw(){
  if(!this.ready||this.destroyed)return;
- if(this.cameraDirty){this.bctx.setTransform(1,0,0,1,0,0);this.bctx.imageSmoothingEnabled=true;this.bctx.imageSmoothingQuality=this.lowQuality?'medium':'high';this.bctx.fillStyle='#111910';this.bctx.fillRect(0,0,this.back.width,this.back.height);this.transform(this.bctx);this.bctx.drawImage(this.background,0,0,WORLD_W,WORLD_H);this.cameraDirty=false;}
+ if(this.cameraDirty){this.bctx.setTransform(1,0,0,1,0,0);this.bctx.imageSmoothingEnabled=true;const moving=this.time-(this.bgDrawnAt??-9)<.14;this.bctx.imageSmoothingQuality=(this.lowQuality||moving)?'medium':'high';this.bgCrisp=!(this.lowQuality||moving);this.bgDrawnAt=this.time;this.bctx.fillStyle='#111910';this.bctx.fillRect(0,0,this.back.width,this.back.height);this.drawBackgroundView();this.cameraDirty=false;}else if(!this.bgCrisp&&!this.lowQuality&&this.time-(this.bgDrawnAt??0)>=.14){this.bctx.setTransform(1,0,0,1,0,0);this.bctx.imageSmoothingEnabled=true;this.bctx.imageSmoothingQuality='high';this.drawBackgroundView();this.bgCrisp=true;}
  const ctx=this.ctx;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,this.canvas.width,this.canvas.height);this.transform(ctx);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
  if(this.companion?.waiting)this.drawWaitingPoint();
  if(this.player.path.length){ctx.strokeStyle='rgba(229,202,136,.30)';ctx.lineWidth=1.5/this.scale;ctx.setLineDash([3/this.scale,7/this.scale]);ctx.beginPath();ctx.moveTo(this.player.x,this.player.y);for(const p of this.player.path)ctx.lineTo(p.x,p.y);ctx.stroke();ctx.setLineDash([]);}
@@ -414,11 +417,16 @@ export class IsometricWorld {
  else{g.strokeStyle='rgba(228,196,133,.28)';g.lineWidth=1;g.beginPath();for(let i=0;i<14;i++){const x=(i*83)%size,y=(i*67)%size;g.moveTo(x,y);g.lineTo(x+22,y-3);}g.stroke();}
  this.weatherTiles.set(kind,c);return c;
  }
+ // v5.0.9c: blit only the visible part of the map (source-rect crop), straight into device pixels.
+ drawBackgroundView(){const b=this.background,g=this.bctx,iw=b.naturalWidth||b.width||WORLD_W,ih=b.naturalHeight||b.height||WORLD_H,kx=iw/WORLD_W,ky=ih/WORLD_H,s=this.scale,d=this.dpr;
+  const vx0=this.camera.x-this.width/2/s,vy0=this.camera.y-this.height/2/s,x0=Math.max(0,Math.floor(vx0)),y0=Math.max(0,Math.floor(vy0)),x1=Math.min(WORLD_W,Math.ceil(vx0+this.width/s)+1),y1=Math.min(WORLD_H,Math.ceil(vy0+this.height/s)+1);
+  if(x1<=x0||y1<=y0)return;g.setTransform(1,0,0,1,0,0);
+  g.drawImage(b,x0*kx,y0*ky,(x1-x0)*kx,(y1-y0)*ky,(x0-vx0)*s*d,(y0-vy0)*s*d,(x1-x0)*s*d,(y1-y0)*s*d);}
  bakeOccluders(){
  this.occluderSprites=(this.scene.occluders||[]).map(o=>{
   const xs=o.polygon.map(p=>p[0]),ys=o.polygon.map(p=>p[1]);
   const pad=2,x0=Math.floor(Math.min(...xs))-pad,y0=Math.floor(Math.min(...ys))-pad,x1=Math.ceil(Math.max(...xs))+pad,y1=Math.ceil(Math.max(...ys))+pad;
-  // v5.0.9b: bake at the background's native resolution (maps are now 2x) so foreground occluders stay crisp when zoomed.
+  // v5.0.9c: bake at the background's native resolution (maps are now 2x) so foreground occluders stay crisp when zoomed.
   const k=Math.max(1,Math.min(2,(this.background.naturalWidth||WORLD_W)/WORLD_W));
   const c=document.createElement('canvas');c.width=Math.max(1,Math.round((x1-x0)*k));c.height=Math.max(1,Math.round((y1-y0)*k));
   const g=c.getContext('2d');g.scale(k,k);g.translate(-x0,-y0);polygon(g,o.polygon);g.clip();g.drawImage(this.background,0,0,WORLD_W,WORLD_H);
@@ -510,14 +518,14 @@ export class IsometricWorld {
  const drawH=a.dog?40:a.hero||a.party?102:a.enemy?107:(a.stature||99),pose=spritePose(rect,drawH);
  const mirror=special!=null?!!gait.mirror:!directional&&(face===0||face===3);let ox=0,oy=0;
  if(this.combatFx){const f=this.combatFx;if(a.hero&&f.id==='attack'&&f.age<.38)ox=Math.sin(f.age/.38*Math.PI)*9;if(a.enemy&&f.id==='attack'&&f.age>.17&&f.age<.5&&f.hit>0)ox=Math.sin(f.age*40)*4;}
- const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+(a.dog?1.4:2.2); // v5.0.9b: soles sit inside the contact shadow, not on its rim
+ const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+(a.dog?1.4:2.2); // v5.0.9c: soles sit inside the contact shadow, not on its rim
  ctx.save();
  // v5.0.9: feet stay on the ground line (no rotation, no planted bounce); breathing only lifts the torso above the hip.
  const bob=gait.planted?0:-(gait.lift||0),sway=gait.sway||0;ctx.translate(a.x+ox+sway,a.y+oy+footShift+bob);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;
  let rigged=false;
  if(rigged){try{this.drawRig(a,pose,gait,meta,row,frame);}catch{rigged=false;}}
  if(!rigged){const source=pose.source,img=this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),breath=gait.planted?(gait.breath||1):1,shift=gait.planted?(gait.shift||0):0;
-  if(shift){ // v5.0.9b weight shift: legs drawn untouched, torso sheared sideways in thin strips (0 at the hip, max at the crown)
+  if(shift){ // v5.0.9c weight shift: legs drawn untouched, torso sheared sideways in thin strips (0 at the hip, max at the crown)
    const sc=pose.height/source.h,hipSrc=Math.round(source.h*.56),lowH=source.h-hipSrc,hipY=-lowH*sc,amp=shift*1.6*(mirror?-1:1),N=10;
    ctx.drawImage(img,source.x,source.y+hipSrc,source.w,lowH,-pose.width/2,hipY,pose.width,lowH*sc);
    for(let i=0;i<N;i++){const y0=Math.floor(hipSrc*i/N),y1=Math.floor(hipSrc*(i+1)/N),k=1-(i+.5)/N;ctx.drawImage(img,source.x,source.y+y0,source.w,y1-y0+(i<N-1?1:0),-pose.width/2+amp*k,hipY-(hipSrc-y0)*sc*breath,pose.width,(y1-y0+(i<N-1?1:0))*sc*breath);}
@@ -678,8 +686,11 @@ export class IsometricWorld {
  if(f.id==='aim'&&f.age<.65){ctx.strokeStyle='#eddb91';ctx.lineWidth=2;ctx.beginPath();ctx.arc(b.x,b.y-55,27,0,Math.PI*2);ctx.stroke();}
  }
  drawMinimap(){if(this.lowQuality&&this._miniSkip){this._miniSkip=false;return;}this._miniSkip=!!this.lowQuality;const c=this.mctx,w=this.mini.width,h=this.mini.height;c.setTransform(1,0,0,1,0,0);if(this.minimapGround){c.globalAlpha=.75;c.drawImage(this.minimapGround,0,0);c.globalAlpha=1;}else{c.clearRect(0,0,w,h);c.globalAlpha=.75;c.drawImage(this.background,0,0,w,h);c.globalAlpha=1;}const sx=w/WORLD_W,sy=h/WORLD_H;for(const a of this.actors){if(!a.location)continue;c.fillStyle='#e3c77e';c.fillRect(a.x*sx-1.5,a.y*sy-1.5,3,3);}c.fillStyle='#e6f4bb';c.beginPath();c.arc(this.player.x*sx,this.player.y*sy,3,0,Math.PI*2);c.fill();c.strokeStyle='#d9d5a677';c.lineWidth=1;c.strokeRect((this.camera.x-this.width/this.scale/2)*sx,(this.camera.y-this.height/this.scale/2)*sy,this.width/this.scale*sx,this.height/this.scale*sy);}
+ retarget(state,callbacks){this.state=state;this.callbacks=callbacks;this.target=null;this.destination=null;this.player.path=[];this.player.moving=false;this.keys.clear();this.pointers.clear();this.drag=null;this.pinch=null;this.cameraDirty=true;if(this.ready)this.draw();}
  destroy(){
  if(this.destroyed)return;memories.set(this.memoryKey||this.id,{x:this.player.x,y:this.player.y,direction:this.player.direction,camera:{...this.camera}});this.destroyed=true;clearTimeout(this.combatTimer);clearTimeout(this.headingTimer);this.combatTimer=null;this.combatFx=null;this.stop();this.listeners.forEach(off=>off());this.resizeObserver?.disconnect();this.intersection?.disconnect();this.keys.clear();this.pointers.clear();
  }
 }
+// v5.0.9c: identity of everything the live scene is built from; when unchanged, app.js re-uses the running world instead of rebuilding it on every UI click.
+export function worldKey(state){if(!state||state.combat||state.ending)return null;const id=sceneId(state.location);if(!SCENES[id])return null;try{return JSON.stringify([state.location,state.lead,state.gear,state.party,weatherAt(state),regionalWeather(state),makeActors(SCENES[id],state)]);}catch{return null;}}
 export function mountWorld(root,state,callbacks){if(!root?.querySelector?.('.actors-layer')?.getContext)return null;return new IsometricWorld(root,state,callbacks);}

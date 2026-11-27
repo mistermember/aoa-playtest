@@ -2,7 +2,7 @@ import {weatherAt,weatherTravel,weatherNotice} from './weather.js';
 import {OUTFITS,WEAPONS,equipmentPortrait,equipmentStats,canEquip,packCapacity,packUsed,packHasRoom} from './equipment.js';
 import {nativeBridge} from './storage.js';
 import {exportCampaign,importCampaign,listenForNativeImports,listenForHardwareBack} from './bridge.js';
-import {mountWorld,resetWorldMemory} from './world.js';
+import {mountWorld,resetWorldMemory,worldKey} from './world.js?v=5.0.9c';
 import {SCENES,sceneId,combatSceneId,makeActors} from './world-data.js';
 import {ROLES,SKILLS,ITEMS,LOCATIONS,PEOPLE,CHAPTERS,DIALOGUES,GLOSSARY,BROTHERS,DOG_RULES,STAPLES} from './content.js';
 import {newGame,dispatch,locationActions,objectives,quote,region,keys,epilogue,validateSave,hitChance,partyActions,partyStatus,storyDialogue,upgradeSave} from './engine.js';
@@ -116,7 +116,7 @@ function sidebar(){const ch=CHAPTERS[state.act];return `<aside class="quest-side
 function locationCards(){const current=LOCATIONS[state.location];const list=Object.entries(LOCATIONS).filter(([id,l])=>l.act<=state.act&&l.region===current.region&&id!==state.location);return `<div class="nearby-header"><span class="eyebrow">NEARBY LOCATIONS</span><button class="text-button" data-view="map">All destinations ${icon('arrow')}</button></div><div class="location-grid">${list.map(([id,l])=>`<button class="location-card" data-travel="${id}"><img src="assets/${l.asset}.webp" alt="" style="object-position:${l.position}" loading="lazy"><span class="location-card-shade"></span><span class="location-card-copy"><small>${l.sub}</small><strong>${l.name}</strong></span>${icon('arrow')}</button>`).join('')||'<p class="muted small">No other local destinations. Open the world map to travel.</p>'}</div>`;}
 function worldStage(combat=false){
  const location=LOCATIONS[state.location],area=SCENES[combat?combatSceneId(state):sceneId(state.location)];
- return `<section class="isometric-world ${combat?'in-combat':''}" style="background-image:url('assets/${area.asset}.webp?v=5.0.9b')" aria-label="Interactive isometric scene: ${esc(location.name)}"><canvas class="terrain-layer" aria-hidden="true"></canvas><canvas class="actors-layer" tabindex="0" role="application" aria-label="${combat?'Turn-based encounter. Choose an action in the command panel.':isTouchUi()?'Isometric exploration. Tap to walk, tap characters to approach and talk.':'Isometric exploration. Click to walk, click characters to approach and talk. WASD or arrow keys move, E interacts, Space pauses, L shows names.'}"></canvas><div class="world-vignette"></div><div class="world-heading"><span class="eyebrow gold">${combat?'HOSTILE COUNTERPARTY':location.region.toUpperCase()}</span><h1>${combat?state.combat.name:location.name}</h1><span>${combat?'ROUND '+state.combat.round+' · YOUR TURN':location.sub.toUpperCase()}</span></div><div class="world-tools"><button data-world="names" aria-label="Show character names" aria-pressed="${readPreferences().names}" title="Character names (L)">${icon('person')}</button><button data-world="center" aria-label="Center on your character" title="Center camera (F)">${icon('target')}</button><button data-world="zoom-out" aria-label="Zoom out">−</button><button data-world="zoom-in" aria-label="Zoom in">+</button>${combat?'':`<button data-world="pause" aria-label="Pause movement" aria-pressed="false" title="Pause / resume (Space)">Ⅱ</button>`}<button data-world="fullscreen" aria-label="Expand play area" title="Expand play area">⛶</button></div><div class="world-loading">Entering ${esc(location.name)}…</div><div class="world-status" role="status" aria-live="polite" hidden></div><div class="world-pause-label">PAUSED <small>${isTouchUi()?'TAP TO RESUME':'SPACE TO RESUME'}</small></div><div class="world-map-panel"><canvas class="world-minimap" width="180" height="120" aria-label="Local minimap"></canvas><button data-view="map">${icon('map')} BASIN MAP ${icon('arrow')}</button></div><div class="world-hint">${combat?`${icon('target')} ${hitChance(state)}% HIT CHANCE · ${state.combat.ammo} ROUNDS`:`<span>${isTouchUi()?'TAP TO MOVE':'CLICK TO MOVE'}</span><i></i><span>${isTouchUi()?'TAP A CHARACTER TO TALK':'CLICK A CHARACTER TO TALK'}</span><button data-world="interact">${isTouchUi()?'':'E '}${icon('person')} INTERACT</button>`}</div></section>`;
+ return `<section class="isometric-world ${combat?'in-combat':''}" style="background-image:url('assets/${area.asset}.webp?v=5.0.9c')" aria-label="Interactive isometric scene: ${esc(location.name)}"><canvas class="terrain-layer" aria-hidden="true"></canvas><canvas class="actors-layer" tabindex="0" role="application" aria-label="${combat?'Turn-based encounter. Choose an action in the command panel.':isTouchUi()?'Isometric exploration. Tap to walk, tap characters to approach and talk.':'Isometric exploration. Click to walk, click characters to approach and talk. WASD or arrow keys move, E interacts, Space pauses, L shows names.'}"></canvas><div class="world-vignette"></div><div class="world-heading"><span class="eyebrow gold">${combat?'HOSTILE COUNTERPARTY':location.region.toUpperCase()}</span><h1>${combat?state.combat.name:location.name}</h1><span>${combat?'ROUND '+state.combat.round+' · YOUR TURN':location.sub.toUpperCase()}</span></div><div class="world-tools"><button data-world="names" aria-label="Show character names" aria-pressed="${readPreferences().names}" title="Character names (L)">${icon('person')}</button><button data-world="center" aria-label="Center on your character" title="Center camera (F)">${icon('target')}</button><button data-world="zoom-out" aria-label="Zoom out">−</button><button data-world="zoom-in" aria-label="Zoom in">+</button>${combat?'':`<button data-world="pause" aria-label="Pause movement" aria-pressed="false" title="Pause / resume (Space)">Ⅱ</button>`}<button data-world="fullscreen" aria-label="Expand play area" title="Expand play area">⛶</button></div><div class="world-loading">Entering ${esc(location.name)}…</div><div class="world-status" role="status" aria-live="polite" hidden></div><div class="world-pause-label">PAUSED <small>${isTouchUi()?'TAP TO RESUME':'SPACE TO RESUME'}</small></div><div class="world-map-panel"><canvas class="world-minimap" width="180" height="120" aria-label="Local minimap"></canvas><button data-view="map">${icon('map')} BASIN MAP ${icon('arrow')}</button></div><div class="world-hint">${combat?`${icon('target')} ${hitChance(state)}% HIT CHANCE · ${state.combat.ammo} ROUNDS`:`<span>${isTouchUi()?'TAP TO MOVE':'CLICK TO MOVE'}</span><i></i><span>${isTouchUi()?'TAP A CHARACTER TO TALK':'CLICK A CHARACTER TO TALK'}</span><button data-world="interact">${isTouchUi()?'':'E '}${icon('person')} INTERACT</button>`}</div></section>`;
 }
 function contactCard(){
  const area=SCENES[sceneId(state.location)],actor=makeActors(area,state).find(a=>a.location===state.location),name=actor?.name||LOCATIONS[state.location].sub;
@@ -202,17 +202,28 @@ function render(){
  document.body.classList.toggle('has-ending',!!state?.ending);
  if(state?.ending)hideToast();
  const modalScroll=app.querySelector('.modal')?.scrollTop||0;
- world?.destroy();world=null;
+ // v5.0.9c: keep the running world (no re-decode / re-bake / re-path) when the UI re-renders around an unchanged scene.
+ let keep=null;if(world&&!world.destroyed&&world.ready&&state&&!state.ending&&view==='scene'&&!state.combat){const k=worldKey(state);if(k&&k===world.key)keep=world;}
+ if(!keep)world?.destroy();world=null;
  const previous=document.activeElement;const focusKey=previous?.dataset?.action;const focusArg=previous?.dataset?.arg;
  app.innerHTML=header()+(state?nav()+`<main class="game-main">${state.ending?endingView():stats()+({scene:scene,map:mapView,journal:journalView,market:marketView,character:characterView}[view]||scene)()}</main>`:landing())+footer()+modalHTML();
  document.body.classList.toggle('modal-open',!!modal);
  const workspace=app.querySelector('.play-workspace');workspace?.classList?.toggle('expanded',expanded);document.body.classList.toggle('expanded-play',!!workspace&&expanded);
  workspace?.querySelector?.('[data-world="fullscreen"]')?.setAttribute?.('aria-label',expanded?'Shrink play area':'Expand play area');
  if(state&&!state.ending&&view==='scene'){
-  world=mountWorld(app.querySelector('.isometric-world'),state,{expand:()=>{expanded=!expanded;render();},interact:worldInteraction,message:toast,approaching:()=>focusScene(),enemy:()=>requestAction('attack')});
-  if(world&&modal)world.paused=true;
+  const cbs={expand:()=>{expanded=!expanded;render();},interact:worldInteraction,message:toast,approaching:()=>focusScene(),enemy:()=>requestAction('attack')};
+  const slot=app.querySelector('.isometric-world');
+  if(keep&&slot){slot.replaceWith(keep.root);keep.retarget(state,cbs);world=keep;keep=null;
+   if(modal&&!world.paused){world.paused=true;world.modalPaused=true;world.stop();}
+   else if(!modal&&world.modalPaused){world.modalPaused=false;world.paused=false;world.wake();}
+  }else{
+   keep?.destroy();keep=null;
+   world=mountWorld(slot,state,cbs);
+   if(world&&modal)world.paused=true;
+  }
   if(world&&appSuspended)world.setSuspended(true);
  }
+ if(keep){keep.destroy();keep=null;}
  if(modal){const pane=app.querySelector('.modal');if(pane)pane.scrollTop=modalScroll;app.querySelector('.modal-close')?.focus({preventScroll:true});}else if(focusKey){const btn=[...app.querySelectorAll('[data-action]')].find(el=>el.dataset.action===focusKey&&el.dataset.arg===focusArg&&!el.disabled);btn?.focus({preventScroll:true});}
 }
 async function exportSave(){const s=state||saved;if(!s){toast('Start a campaign first.');return;}await exportCampaign(JSON.stringify(s,null,2),`age-of-abundance-turn-${s.turn}.json`);}
