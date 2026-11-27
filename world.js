@@ -1,18 +1,18 @@
-import {gaitPose,spritePose,boneAffine,kneeFor,footTargets,idleAtlasFor,ensureIdle,stepIdle,gestureFrame} from './animation.js?v=5.0.9c';
+import {gaitPose,spritePose,boneAffine,kneeFor,footTargets,idleAtlasFor,ensureIdle,stepIdle,gestureFrame} from './animation.js?v=5.0.9d';
 import {weatherAt,regionalWeather,hoodRaised} from './weather.js';
 import {equipmentAtlas} from './equipment.js';
 import {readPreferences,savePreference} from './preferences.js';
-import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,coastTarget,resolveSeparation,separateCrowd,blockActors,facingFrom} from './navigation.js?v=5.0.9c';
+import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,coastTarget,resolveSeparation,separateCrowd,blockActors,facingFrom} from './navigation.js?v=5.0.9d';
 import {SCENES,sceneId,combatSceneId,combatStaging,makeActors} from './world-data.js';
 
 const imageCache=new Map(),memories=new Map();
 let metadataPromise;
 export function resetWorldMemory(){memories.clear();}
-// v5.0.9c: map backgrounds are 3072x2048 now; keep only the two most recent decoded maps alive (low-RAM phones).
+// v5.0.9d: map backgrounds are 3072x2048 now; keep only the two most recent decoded maps alive (low-RAM phones).
 const recentMaps=[];
 function rememberMap(name){if(!/-map$/.test(name))return;const i=recentMaps.indexOf(name);if(i>=0)recentMaps.splice(i,1);recentMaps.push(name);while(recentMaps.length>2)imageCache.delete(recentMaps.shift());}
-function loadImage(name){rememberMap(name);if(!imageCache.has(name)){imageCache.set(name,new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>{imageCache.delete(name);reject(new Error(`Could not load ${name}`));};i.src=`assets/${name}.webp?v=5.0.9c`;}));}return imageCache.get(name);}
-function loadMetadata(){return metadataPromise??=fetch('assets/sprite-frames.json?v=5.0.9c').then(r=>{if(!r.ok)throw Error('Sprite data unavailable');return r.json();}).catch(e=>{metadataPromise=null;throw e;});}
+function loadImage(name){rememberMap(name);if(!imageCache.has(name)){imageCache.set(name,new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>{imageCache.delete(name);reject(new Error(`Could not load ${name}`));};i.src=`assets/${name}.webp?v=5.0.9d`;}));}return imageCache.get(name);}
+function loadMetadata(){return metadataPromise??=fetch('assets/sprite-frames.json?v=5.0.9d').then(r=>{if(!r.ok)throw Error('Sprite data unavailable');return r.json();}).catch(e=>{metadataPromise=null;throw e;});}
 function annotateFootPads(meta,atlases){
  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
  for(const [name,image] of Object.entries(atlases)){
@@ -73,7 +73,7 @@ export class IsometricWorld {
  if(actor.waiting||actor.sheltered||this.target?.actor===actor)return;
  if(actor.held)return;
  if(actor===this.companion&&this.quirk&&(this.quirk.stage==='approach'||this.quirk.stage==='step')&&leader.planted){this.advanceActor(actor,dt);return;}
- // v5.0.9c: a planted brother holds his ground while Uygar walks up to him (instead of shuffling off to the trail point).
+ // v5.0.9d: a planted brother holds his ground while Uygar walks up to him (instead of shuffling off to the trail point).
  if(actor===this.companion){const g=distance(actor,leader),closing=g<(actor.lastGap??1e9)-.05;actor.lastGap=g;if(closing&&g<180&&actor.planted&&!actor.path?.length){actor.velocity=0;actor.moving=false;this.advanceActor(actor,dt);return;}}
  if(actor.idle?.mode==='quirk'&&(leader.planted||this.quirk?.kind==='holdup')){actor.path=[];actor.velocity=0;actor.moving=false;actor.planted=true;this.advanceActor(actor,dt);return;}
  if(actor.dog&&this.updateDogRoam(actor,leader,dt))return;
@@ -160,7 +160,7 @@ export class IsometricWorld {
  this.drag=null;if(!drag||drag.moved||drag.button===2)return;this.click(this.eventPoint(e));
  }
  setSuspended(suspended){this.suspended=suspended;this.keys.clear();this.pointers.clear();this.pinch=null;this.drag=null;if(suspended){this.finishCombat();this.stop();}else this.wake();}
- // v5.0.9c: never zoom past the map art's native texel density (3072px over a 1536-unit world = 2 texels/unit),
+ // v5.0.9d: never zoom past the map art's native texel density (3072px over a 1536-unit world = 2 texels/unit),
  // allowing ~15% upscale; on huge/retina viewports this stops the camera from magnifying blurry pixels.
  maxZoom(){const tex=Math.max(1,((this.background?.naturalWidth||this.background?.width||WORLD_W*2))/WORLD_W);const phys=(this.baseScale||1)*Math.max(1,window.devicePixelRatio||1);return clamp(tex*1.15/phys,1.25,2.1);}
  resize(){if(this.destroyed)return;const r=this.root.getBoundingClientRect();this.width=Math.max(1,r.width);this.height=Math.max(1,r.height);this.dprCap=this.dprCap||(this.economy?1.5:2);this.dpr=Math.min(window.devicePixelRatio||1,this.dprCap);for(const c of [this.canvas,this.back]){c.width=Math.round(this.width*this.dpr);c.height=Math.round(this.height*this.dpr);c.style.width=this.width+'px';c.style.height=this.height+'px';}this.baseScale=Math.max(this.width/WORLD_W,this.height/WORLD_H);if(this.background)this.camera.zoom=Math.min(this.camera.zoom,this.maxZoom());this.scale=this.baseScale*this.camera.zoom;this.clampCamera();this.cameraDirty=true;if(this.ready)this.draw();}
@@ -219,7 +219,7 @@ export class IsometricWorld {
  this.stepLivingWorld(dt);
  if(this.follow&&!this.drag){const targetX=this.player.x,targetY=this.player.y-85,dx=targetX-this.camera.x,dy=targetY-this.camera.y;const deadX=Math.max(48,(this.width/this.scale)*0.20),deadY=Math.max(36,(this.height/this.scale)*0.16);let mx=0,my=0;if(Math.abs(dx)>deadX)mx=dx-Math.sign(dx)*deadX;if(Math.abs(dy)>deadY)my=dy-Math.sign(dy)*deadY;if(mx||my){this.camera.x+=mx*Math.min(1,dt*4);this.camera.y+=my*Math.min(1,dt*4);this.clampCamera();this.cameraDirty=true;}}
  }
- // v5.0.9c: Berkay's two quirks. (1) Personal space: when Uygar steps within ~62 units of a planted Berkay he raises a
+ // v5.0.9d: Berkay's two quirks. (1) Personal space: when Uygar steps within ~62 units of a planted Berkay he raises a
  // palm ("hold up"), then takes one small step back; 12 s cooldown. (2) Every ~20-35 s of a calm, idle party with Pukie
  // close by, Berkay picks Pukie up, hugs him for ~2 s and sets him down beside his boots. Only one Pukie is ever drawn
  // (the ground dog is hidden while held) and the hug cancels the instant Uygar moves, interacts or anything starts.
@@ -417,7 +417,7 @@ export class IsometricWorld {
  else{g.strokeStyle='rgba(228,196,133,.28)';g.lineWidth=1;g.beginPath();for(let i=0;i<14;i++){const x=(i*83)%size,y=(i*67)%size;g.moveTo(x,y);g.lineTo(x+22,y-3);}g.stroke();}
  this.weatherTiles.set(kind,c);return c;
  }
- // v5.0.9c: blit only the visible part of the map (source-rect crop), straight into device pixels.
+ // v5.0.9d: blit only the visible part of the map (source-rect crop), straight into device pixels.
  drawBackgroundView(){const b=this.background,g=this.bctx,iw=b.naturalWidth||b.width||WORLD_W,ih=b.naturalHeight||b.height||WORLD_H,kx=iw/WORLD_W,ky=ih/WORLD_H,s=this.scale,d=this.dpr;
   const vx0=this.camera.x-this.width/2/s,vy0=this.camera.y-this.height/2/s,x0=Math.max(0,Math.floor(vx0)),y0=Math.max(0,Math.floor(vy0)),x1=Math.min(WORLD_W,Math.ceil(vx0+this.width/s)+1),y1=Math.min(WORLD_H,Math.ceil(vy0+this.height/s)+1);
   if(x1<=x0||y1<=y0)return;g.setTransform(1,0,0,1,0,0);
@@ -426,7 +426,7 @@ export class IsometricWorld {
  this.occluderSprites=(this.scene.occluders||[]).map(o=>{
   const xs=o.polygon.map(p=>p[0]),ys=o.polygon.map(p=>p[1]);
   const pad=2,x0=Math.floor(Math.min(...xs))-pad,y0=Math.floor(Math.min(...ys))-pad,x1=Math.ceil(Math.max(...xs))+pad,y1=Math.ceil(Math.max(...ys))+pad;
-  // v5.0.9c: bake at the background's native resolution (maps are now 2x) so foreground occluders stay crisp when zoomed.
+  // v5.0.9d: bake at the background's native resolution (maps are now 2x) so foreground occluders stay crisp when zoomed.
   const k=Math.max(1,Math.min(2,(this.background.naturalWidth||WORLD_W)/WORLD_W));
   const c=document.createElement('canvas');c.width=Math.max(1,Math.round((x1-x0)*k));c.height=Math.max(1,Math.round((y1-y0)*k));
   const g=c.getContext('2d');g.scale(k,k);g.translate(-x0,-y0);polygon(g,o.polygon);g.clip();g.drawImage(this.background,0,0,WORLD_W,WORLD_H);
@@ -518,14 +518,14 @@ export class IsometricWorld {
  const drawH=a.dog?40:a.hero||a.party?102:a.enemy?107:(a.stature||99),pose=spritePose(rect,drawH);
  const mirror=special!=null?!!gait.mirror:!directional&&(face===0||face===3);let ox=0,oy=0;
  if(this.combatFx){const f=this.combatFx;if(a.hero&&f.id==='attack'&&f.age<.38)ox=Math.sin(f.age/.38*Math.PI)*9;if(a.enemy&&f.id==='attack'&&f.age>.17&&f.age<.5&&f.hit>0)ox=Math.sin(f.age*40)*4;}
- const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+(a.dog?1.4:2.2); // v5.0.9c: soles sit inside the contact shadow, not on its rim
+ const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+(a.dog?1.4:2.2); // v5.0.9d: soles sit inside the contact shadow, not on its rim
  ctx.save();
  // v5.0.9: feet stay on the ground line (no rotation, no planted bounce); breathing only lifts the torso above the hip.
  const bob=gait.planted?0:-(gait.lift||0),sway=gait.sway||0;ctx.translate(a.x+ox+sway,a.y+oy+footShift+bob);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;
  let rigged=false;
  if(rigged){try{this.drawRig(a,pose,gait,meta,row,frame);}catch{rigged=false;}}
  if(!rigged){const source=pose.source,img=this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),breath=gait.planted?(gait.breath||1):1,shift=gait.planted?(gait.shift||0):0;
-  if(shift){ // v5.0.9c weight shift: legs drawn untouched, torso sheared sideways in thin strips (0 at the hip, max at the crown)
+  if(shift){ // v5.0.9d weight shift: legs drawn untouched, torso sheared sideways in thin strips (0 at the hip, max at the crown)
    const sc=pose.height/source.h,hipSrc=Math.round(source.h*.56),lowH=source.h-hipSrc,hipY=-lowH*sc,amp=shift*1.6*(mirror?-1:1),N=10;
    ctx.drawImage(img,source.x,source.y+hipSrc,source.w,lowH,-pose.width/2,hipY,pose.width,lowH*sc);
    for(let i=0;i<N;i++){const y0=Math.floor(hipSrc*i/N),y1=Math.floor(hipSrc*(i+1)/N),k=1-(i+.5)/N;ctx.drawImage(img,source.x,source.y+y0,source.w,y1-y0+(i<N-1?1:0),-pose.width/2+amp*k,hipY-(hipSrc-y0)*sc*breath,pose.width,(y1-y0+(i<N-1?1:0))*sc*breath);}
@@ -691,6 +691,6 @@ export class IsometricWorld {
  if(this.destroyed)return;memories.set(this.memoryKey||this.id,{x:this.player.x,y:this.player.y,direction:this.player.direction,camera:{...this.camera}});this.destroyed=true;clearTimeout(this.combatTimer);clearTimeout(this.headingTimer);this.combatTimer=null;this.combatFx=null;this.stop();this.listeners.forEach(off=>off());this.resizeObserver?.disconnect();this.intersection?.disconnect();this.keys.clear();this.pointers.clear();
  }
 }
-// v5.0.9c: identity of everything the live scene is built from; when unchanged, app.js re-uses the running world instead of rebuilding it on every UI click.
+// v5.0.9d: identity of everything the live scene is built from; when unchanged, app.js re-uses the running world instead of rebuilding it on every UI click.
 export function worldKey(state){if(!state||state.combat||state.ending)return null;const id=sceneId(state.location);if(!SCENES[id])return null;try{return JSON.stringify([state.location,state.lead,state.gear,state.party,weatherAt(state),regionalWeather(state),makeActors(SCENES[id],state)]);}catch{return null;}}
 export function mountWorld(root,state,callbacks){if(!root?.querySelector?.('.actors-layer')?.getContext)return null;return new IsometricWorld(root,state,callbacks);}
