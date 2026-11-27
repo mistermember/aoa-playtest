@@ -185,7 +185,8 @@ export class IsometricWorld {
  faceEachOther(a,b){const dx=b.x-a.x,dy=b.y-a.y;a.direction=dy>=0?(dx>=0?0:1):(dx<0?2:3);b.direction=(a.direction+2)%4;}
  stop(){if(this.raf)cancelAnimationFrame(this.raf);this.raf=0;this.last=0;}
  wake(){if(this.destroyed||!this.ready||!this.visible||this.suspended||this.paused||this.raf)return;this.last=0;this.raf=requestAnimationFrame(t=>this.frame(t));}
- frame(t){this.raf=0;if(this.destroyed||!this.visible||this.suspended||this.paused)return;const elapsed=this.last?t-this.last:16.7;const standing=!this.player.path.length&&!this.keys.size&&!this.partyActors().some(a=>a.path.length)&&!this.combatFx;const cap=this.reduced?30:this.economy?(standing?15:24):60;if(elapsed>=1000/cap-1){if(elapsed>22)this.slowFrames=(this.slowFrames||0)+1;else if(elapsed<17)this.slowFrames=Math.max(0,(this.slowFrames||0)-2);this.lowQuality=!!(this.economy||this.reduced||(this.slowFrames||0)>=2);if((this.slowFrames||0)>=2&&this.dprCap>2&&!this.economy){this.dprCap=Math.max(2,+(this.dprCap-0.5).toFixed(2));this.slowFrames=0;this.resize();}this.last=t;this.update(Math.min(elapsed/1000,.08));if(this.destroyed)return;this.draw();if(this.state.combat&&!this.combatFx)return;if(this.reduced&&standing)return;}this.raf=requestAnimationFrame(n=>this.frame(n));}
+ frame(t){this.raf=0;if(this.destroyed||!this.visible||this.suspended||this.paused)return;if(!this.last)this.last=t-1000/60; // v5.0.9: seed the clock so capped (reduced-motion/battery) loops can ever reach their frame budget
+ const elapsed=t-this.last;const standing=!this.player.path.length&&!this.keys.size&&!this.partyActors().some(a=>a.path.length)&&!this.combatFx;const cap=this.reduced?30:this.economy?(standing?15:24):60;if(elapsed>=1000/cap-1){if(elapsed>22)this.slowFrames=(this.slowFrames||0)+1;else if(elapsed<17)this.slowFrames=Math.max(0,(this.slowFrames||0)-2);this.lowQuality=!!(this.economy||this.reduced||(this.slowFrames||0)>=2);if((this.slowFrames||0)>=2&&this.dprCap>2&&!this.economy){this.dprCap=Math.max(2,+(this.dprCap-0.5).toFixed(2));this.slowFrames=0;this.resize();}this.last=t;this.update(Math.min(elapsed/1000,.08));if(this.destroyed)return;this.draw();if(this.state.combat&&!this.combatFx)return;if(this.reduced&&standing)return;}this.raf=requestAnimationFrame(n=>this.frame(n));}
  update(dt){
  this.time+=dt;this.updateDust(dt);
  if(this.combatFx){this.combatFx.age+=dt;this.updateCombat();return;}
@@ -415,10 +416,15 @@ export class IsometricWorld {
  if(this.combatFx){const f=this.combatFx;if(a.hero&&f.id==='attack'&&f.age<.38)ox=Math.sin(f.age/.38*Math.PI)*9;if(a.enemy&&f.id==='attack'&&f.age>.17&&f.age<.5&&f.hit>0)ox=Math.sin(f.age*40)*4;}
  const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+1.2;
  ctx.save();
- const bob=gait.planted?-((gait.bounce||0)+(gait.bob||0)):-(gait.lift||0),sway=gait.planted?0:(gait.sway||0);ctx.translate(a.x+ox+sway,a.y+oy+footShift+bob);if(mirror)ctx.scale(-1,1);if(!gait.planted&&gait.lean)ctx.rotate(gait.lean);if(gait.planted&&gait.breath&&gait.breath!==1)ctx.scale(1,gait.breath);if(a.filter)ctx.filter=a.filter;
+ // v5.0.9: feet stay on the ground line (no rotation, no planted bounce); breathing only lifts the torso above the hip.
+ const bob=gait.planted?0:-(gait.lift||0),sway=gait.sway||0;ctx.translate(a.x+ox+sway,a.y+oy+footShift+bob);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;
  let rigged=false;
  if(rigged){try{this.drawRig(a,pose,gait,meta,row,frame);}catch{rigged=false;}}
- if(!rigged){const source=pose.source;ctx.drawImage(this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);}
+ if(!rigged){const source=pose.source,img=this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),breath=gait.planted?(gait.breath||1):1;
+  if(breath===1)ctx.drawImage(img,source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);
+  else{const sc=pose.height/source.h,hipSrc=Math.round(source.h*.56),lowH=source.h-hipSrc,hipY=-lowH*sc;
+   ctx.drawImage(img,source.x,source.y+hipSrc,source.w,lowH,-pose.width/2,hipY,pose.width,lowH*sc);
+   ctx.save();ctx.translate(0,hipY);ctx.scale(1,breath);ctx.drawImage(img,source.x,source.y,source.w,hipSrc+1,-pose.width/2,-hipSrc*sc,pose.width,(hipSrc+1)*sc);ctx.restore();}}
  if(a.look)this.drawEquipment(a,pose);if(a.filter)ctx.filter='none';ctx.restore();
  }
  drawRig(a,pose,gait,meta,row,frame){

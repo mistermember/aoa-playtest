@@ -10,6 +10,7 @@ export function idleAtlasFor(walkAtlas){
   'berkay-hat-glasses-walk':'berkay-hat-glasses-idle',
   'berkay-rain-walk':'berkay-rain-idle',
   'berkay-rain-hat-walk':'berkay-rain-hat-idle',
+  // berkay-rain-hat-glasses-walk is byte-identical to berkay-hat-glasses-walk, so it shares that standing sheet.
   'berkay-rain-hat-glasses-walk':'berkay-hat-glasses-idle',
   'berkay-rain-hood-walk':'berkay-rain-hood-idle'
  };
@@ -34,19 +35,20 @@ export function resetIdle(actor){
  idle.next=2+(idle.seed||0)*2;idle.nextWag=1.2+(idle.seed||0)*1.2;idle.nextSniff=2.8+(idle.seed||0)*2.2;idle.nextRoam=10+(idle.seed||0)*5;
  if(idle.roam)idle.roam=null;
 }
+// Breathing: torso-only rise of at most 1.2%, applied above the hip line in world.js (legs never stretch).
 export function breathScale(time,seed){
- return 1+0.0075*Math.sin((time+(seed||0)*3.4)*2*Math.PI/3.4);
+ return 1+0.006*(1+Math.sin((time+(seed||0)*3.4)*2*Math.PI/3.8));
 }
 export function stepIdle(actor,dt,opts={}){
  const reduced=!!opts.reduced;
  const idle=ensureIdle(actor);
  const planted=!!(actor.planted??(!actor.moving||(actor.velocity||0)<8));
  idle.clock=(idle.clock||0)+dt;
- idle.bounce=0;idle.bob=0;
+ idle.bounce=0;idle.bob=0;idle.shimmy=0;
  if(!planted){resetIdle(actor);return idle;}
  idle.plantedFor+=dt;
  idle.t+=dt;
- if(reduced){idle.col=idleAtlasFor(actor.atlas)?0:2;idle.mode='stand';idle.glanceDir=null;return idle;}
+ if(reduced){idle.col=idleAtlasFor(actor.atlas)?0:NPC_STAND_COL;idle.mode='stand';idle.glanceDir=null;return idle;}
  if(actor.dog)return stepDogIdle(actor,dt,opts,idle);
  if(actor.hero||actor.party)return stepHumanIdle(actor,dt,idle,!!idleAtlasFor(actor.atlas));
  return stepNpcIdle(actor,dt,idle);
@@ -54,31 +56,30 @@ export function stepIdle(actor,dt,opts={}){
 function stepHumanIdle(actor,dt,idle,hasSheet){
  const hold=()=>1.8+Math.random()*.8,cadence=()=>2.8+Math.random()*2.4;
  if(!hasSheet){
-  idle.col=2;
+  idle.col=NPC_STAND_COL;
   if(idle.mode==='stand'){
    idle.glanceDir=null;
    if(idle.t>=idle.next){idle.mode='glance';idle.t=0;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=hold();}
   }else if(idle.t>=idle.next){idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=cadence();}
   return idle;
  }
+ // v5.0.9: every column of a standing sheet is the same two-feet-down pose; idle life is breathing plus an occasional glance.
+ idle.col=0;
  if(idle.mode==='stand'){
-  idle.col=0;idle.glanceDir=null;
+  idle.glanceDir=null;
   if(idle.t>=idle.next){
-   const r=Math.random();
-   const act=r<.25?'look':r<.57?'gesture1':r<.85?'gesture2':'glance';
-   idle.mode=act;idle.t=0;idle.next=hold();
-   if(act==='look')idle.col=1;
-   else if(act==='gesture1')idle.col=2;
-   else if(act==='gesture2')idle.col=3;
-   else{idle.col=Math.random()<.5?0:1;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;}
+   idle.mode='glance';idle.t=0;idle.next=hold();
+   const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;
   }
  }else if(idle.t>=idle.next){
-  idle.mode='stand';idle.col=0;idle.glanceDir=null;idle.t=0;idle.next=cadence();
+  idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=cadence()+2.5;
  }
  return idle;
 }
+// NPC sheets have no standing art; column 1 is the passing pose (feet closest together, both near the ground line).
+const NPC_STAND_COL=1;
 function stepNpcIdle(actor,dt,idle){
- idle.col=2;
+ idle.col=NPC_STAND_COL;
  if(idle.mode==='stand'){
   idle.glanceDir=null;
   if(idle.t>=idle.next){idle.mode='glance';idle.t=0;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=1.8+Math.random()*.8;}
@@ -86,35 +87,27 @@ function stepNpcIdle(actor,dt,idle){
  return idle;
 }
 function stepDogIdle(actor,dt,opts,idle){
+ // v5.0.9: Pukie always stands on four paws while planted. No vertical bounce/bob (it read as tilting/popping);
+ // a wag is a tiny sideways shimmy of the whole dog, sniffing just holds still.
  const roam=idle.roam;
+ idle.col=0;
  if(roam&&(roam.stage==='go'||roam.stage==='back'))return idle;
- if(roam&&(roam.stage==='sniff'||roam.stage==='wag')){
-  if(roam.stage==='wag'){const hz=4.5;idle.col=Math.floor(idle.t*hz)%2;idle.bounce=Math.abs(Math.sin(idle.t*hz*Math.PI))*1.6;}
-  else{idle.col=2;idle.bob=Math.sin(idle.t*10)*1.1;}
-  return idle;
- }
+ const wag=t=>{const hz=4.5;idle.shimmy=Math.sin(t*hz*2*Math.PI)*.35;};
+ if(roam&&(roam.stage==='sniff'||roam.stage==='wag')){if(roam.stage==='wag')wag(idle.t);return idle;}
  if(idle.mode==='wag'){
-  const hz=4.5;idle.col=Math.floor(idle.t*hz)%2;idle.bounce=Math.abs(Math.sin(idle.t*hz*Math.PI))*1.6;
-  if(idle.t>=1.5){idle.mode='stand';idle.col=0;idle.t=0;idle.bounce=0;idle.nextWag=2+Math.random()*2;}
+  wag(idle.t);
+  if(idle.t>=1.5){idle.mode='stand';idle.t=0;idle.shimmy=0;idle.nextWag=2+Math.random()*2;}
   return idle;
  }
  if(idle.mode==='sniff'){
-  idle.col=2;idle.bob=Math.sin(idle.t*10)*1.1;
-  if(idle.t>=idle.next){idle.mode='stand';idle.col=0;idle.t=0;idle.bob=0;idle.nextSniff=4+Math.random()*3.5;}
+  if(idle.t>=idle.next){idle.mode='stand';idle.t=0;idle.nextSniff=4+Math.random()*3.5;}
   return idle;
  }
- if(idle.mode==='sit'){
-  idle.col=3;
-  if(idle.perkT>0){idle.perkT-=dt;idle.col=1;idle.bounce=.55;}
-  else if(Math.random()<dt*.12)idle.perkT=.35+Math.random()*.25;
-  return idle;
- }
- idle.col=0;
+ if(idle.mode==='sit'){idle.mode='stand';idle.t=0;}
  idle.nextWag=(idle.nextWag??2.5)-dt;
  idle.nextSniff=(idle.nextSniff??5)-dt;
  if(idle.nextWag<=0){idle.mode='wag';idle.t=0;return idle;}
  if(idle.nextSniff<=0){idle.mode='sniff';idle.t=0;idle.next=2.4+Math.random()*.8;return idle;}
- if(opts.nearLeader!==false&&idle.plantedFor>=(idle.sitAfter||10)){idle.mode='sit';idle.t=0;idle.col=3;}
  return idle;
 }
 export function gaitPose(actor,reduced=false){
@@ -124,19 +117,22 @@ export function gaitPose(actor,reduced=false){
  const idle=actor.idle;
  if(planted){
   const hasSheet=!!idleAtlasFor(actor.atlas);
-  const frame=hasSheet?(idle?.col??0):2;
-  return {frame,cycle,lift:0,sway:0,lean:0,planted:true,idle:true,bounce:idle?.bounce||0,bob:idle?.bob||0,breath:reduced?1:breathScale(idle?.clock||0,idle?.seed||0)};
+  const frame=hasSheet?(idle?.col??0):(idle?.col??NPC_STAND_COL);
+  return {frame,cycle,lift:0,sway:reduced?0:(idle?.shimmy||0),lean:0,planted:true,idle:true,bounce:0,bob:0,breath:(reduced||actor.dog)?1:breathScale(idle?.clock||0,idle?.seed||0)};
  }
- const lift=reduced?0:Math.abs(Math.sin(cycle*2*Math.PI))*(actor.dog?.35:.85);
- const sway=reduced?0:Math.sin(cycle*2*Math.PI)*(actor.dog?.55:1.15);
- const lean=reduced?0:Math.sin(cycle*2*Math.PI)*(actor.dog?.7:1.35)*Math.PI/180;
+ // v5.0.9: no body rotation while walking (it tilted the whole sprite incl. feet, so planted feet skated);
+ // a small vertical lift at the passing position and a gentle lateral weight shift remain.
+ const lift=reduced?0:Math.abs(Math.sin(cycle*2*Math.PI))*(actor.dog?.25:.7);
+ const sway=reduced?0:Math.sin(cycle*2*Math.PI)*(actor.dog?.25:.6);
+ const lean=0;
  return {frame:Math.floor(cycle*4)%4,cycle,lift,sway,lean,planted:false,bounce:0,bob:0,breath:1};
 }
 export function spritePose(frame,stature){
- const b=frame.bounds||{x:0,y:0,w:frame.w,h:frame.h},scale=stature/b.h;
+ // refH (standing sheets) keeps the pixel-locked upper body at walk scale; the standing height is b.h*scale.
+ const b=frame.bounds||{x:0,y:0,w:frame.w,h:frame.h},scale=stature/(frame.refH||b.h);
  const anchors=frame.anchors||{crown:{x:b.w/2,y:2},face:{x:b.w/2,y:b.h*.12},hip:{x:b.w/2,y:b.h*.54},hand:{x:b.w*.7,y:b.h*.55},headWidth:b.w*.3};
  const point=p=>({x:(p.x-b.w/2)*scale,y:(p.y-b.h)*scale});
- return {source:{x:frame.x+b.x,y:frame.y+b.y,w:b.w,h:b.h},width:b.w*scale,height:stature,crown:point(anchors.crown),face:point(anchors.face),hip:point(anchors.hip),hand:point(anchors.hand),headWidth:anchors.headWidth*scale};
+ return {source:{x:frame.x+b.x,y:frame.y+b.y,w:b.w,h:b.h},width:b.w*scale,height:b.h*scale,scale,crown:point(anchors.crown),face:point(anchors.face),hip:point(anchors.hip),hand:point(anchors.hand),headWidth:anchors.headWidth*scale};
 }
 export function boneAffine(a,b,A,B){
  const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,ex=B.x-A.x,ey=B.y-A.y,next=Math.hypot(ex,ey)||1;
