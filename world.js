@@ -1,15 +1,18 @@
-import {gaitPose,spritePose,boneAffine,kneeFor,footTargets,idleAtlasFor,ensureIdle,stepIdle} from './animation.js';
+import {gaitPose,spritePose,boneAffine,kneeFor,footTargets,idleAtlasFor,ensureIdle,stepIdle,gestureFrame} from './animation.js';
 import {weatherAt,regionalWeather,hoodRaised} from './weather.js';
 import {equipmentAtlas} from './equipment.js';
 import {readPreferences,savePreference} from './preferences.js';
-import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,coastTarget,resolveSeparation,separateCrowd,blockActors} from './navigation.js';
+import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,coastTarget,resolveSeparation,separateCrowd,blockActors,facingFrom} from './navigation.js';
 import {SCENES,sceneId,combatSceneId,combatStaging,makeActors} from './world-data.js';
 
 const imageCache=new Map(),memories=new Map();
 let metadataPromise;
 export function resetWorldMemory(){memories.clear();}
-function loadImage(name){if(!imageCache.has(name)){imageCache.set(name,new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>{imageCache.delete(name);reject(new Error(`Could not load ${name}`));};i.src=`assets/${name}.webp`;}));}return imageCache.get(name);}
-function loadMetadata(){return metadataPromise??=fetch('assets/sprite-frames.json').then(r=>{if(!r.ok)throw Error('Sprite data unavailable');return r.json();}).catch(e=>{metadataPromise=null;throw e;});}
+// v5.0.9b: map backgrounds are 3072x2048 now; keep only the two most recent decoded maps alive (low-RAM phones).
+const recentMaps=[];
+function rememberMap(name){if(!/-map$/.test(name))return;const i=recentMaps.indexOf(name);if(i>=0)recentMaps.splice(i,1);recentMaps.push(name);while(recentMaps.length>2)imageCache.delete(recentMaps.shift());}
+function loadImage(name){rememberMap(name);if(!imageCache.has(name)){imageCache.set(name,new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>{imageCache.delete(name);reject(new Error(`Could not load ${name}`));};i.src=`assets/${name}.webp?v=5.0.9b`;}));}return imageCache.get(name);}
+function loadMetadata(){return metadataPromise??=fetch('assets/sprite-frames.json?v=5.0.9b').then(r=>{if(!r.ok)throw Error('Sprite data unavailable');return r.json();}).catch(e=>{metadataPromise=null;throw e;});}
 function annotateFootPads(meta,atlases){
  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
  for(const [name,image] of Object.entries(atlases)){
@@ -36,6 +39,7 @@ function polygon(ctx,points){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lin
 
 export class IsometricWorld {
  constructor(root,state,callbacks){
+ if(typeof location!=='undefined'&&/[?&]qa=1\b/.test(location.search||''))globalThis.__aoaWorld=this; // QA hook (only with ?qa=1)
  this.root=root;this.canvas=root.querySelector('.actors-layer');this.back=root.querySelector('.terrain-layer');this.ctx=this.canvas.getContext('2d');this.bctx=this.back.getContext('2d',{alpha:false});this.mini=root.querySelector('.world-minimap');this.mctx=this.mini?.getContext('2d');
  this.weather=weatherAt(state);this.atmosphere=state.combat&&!this.weather.exposed?'clear':regionalWeather(state);this.state=state;this.callbacks=callbacks;this.id=state.combat?combatSceneId(state):sceneId(state.location);this.scene=SCENES[this.id];this.grid=buildGrid(this.scene.polygon,this.scene.obstacles);this.actors=makeActors(this.scene,state);this.listeners=[];this.raf=0;this.destroyed=false;this.paused=false;this.visible=true;this.suspended=!!document.hidden;this.ready=false;this.last=0;this.time=0;this.cameraDirty=true;this.hover=null;this.target=null;this.destination=null;this.showNames=readPreferences().names;this.combatTimer=null;this.keys=new Set();this.follow=true;this.reduced=document.body.classList.contains('reduce-motion')||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;this.economy=readPreferences().battery;this.pointers=new Map();this.pinch=null;this.social=null;this.nextSocial=8;this.combatFx=null;this.trail=[];this.puffs=[];this.motes=[];
  this.memoryKey=state.combat?'combat:'+this.id:state.location;
@@ -67,6 +71,11 @@ export class IsometricWorld {
  partyActors(){return [this.companion,this.dog].filter(Boolean);}
  updateFollower(actor,leader,dt,gap,side){
  if(actor.waiting||actor.sheltered||this.target?.actor===actor)return;
+ if(actor.held)return;
+ if(actor===this.companion&&this.quirk&&(this.quirk.stage==='approach'||this.quirk.stage==='step')&&leader.planted){this.advanceActor(actor,dt);return;}
+ // v5.0.9b: a planted brother holds his ground while Uygar walks up to him (instead of shuffling off to the trail point).
+ if(actor===this.companion){const g=distance(actor,leader),closing=g<(actor.lastGap??1e9)-.05;actor.lastGap=g;if(closing&&g<180&&actor.planted&&!actor.path?.length){actor.velocity=0;actor.moving=false;this.advanceActor(actor,dt);return;}}
+ if(actor.idle?.mode==='quirk'&&(leader.planted||this.quirk?.kind==='holdup')){actor.path=[];actor.velocity=0;actor.moving=false;actor.planted=true;this.advanceActor(actor,dt);return;}
  if(actor.dog&&this.updateDogRoam(actor,leader,dt))return;
  const posing=actor.idle&&(actor.idle.mode==='sit'||actor.idle.mode==='wag'||actor.idle.mode==='sniff'||actor.idle.mode==='look'||actor.idle.mode==='gesture1'||actor.idle.mode==='gesture2'||actor.idle.mode==='glance');
  if(posing&&leader.planted){actor.path=[];this.advanceActor(actor,dt);return;}
@@ -159,7 +168,7 @@ export class IsometricWorld {
  center(){this.follow=true;this.camera.x=this.player.x;this.camera.y=this.player.y-100;this.clampCamera();this.cameraDirty=true;this.draw();this.canvas.focus({preventScroll:true});}
  toggleNames(){this.showNames=!this.showNames;savePreference('names',this.showNames);this.root.querySelector('[data-world="names"]')?.setAttribute('aria-pressed',String(this.showNames));this.draw();}
  togglePause(){if(this.state.combat||this.combatFx)return;this.paused=!this.paused;this.root.classList.toggle('world-paused',this.paused);this.root.querySelector('[data-world="pause"]')?.setAttribute('aria-pressed',String(this.paused));if(this.paused){this.stop();this.draw();}else this.wake();}
- pickActor(p){const actors=[...this.actors,...this.partyActors(),...(this.enemy?[this.enemy]:[])];return actors.sort((a,b)=>b.y-a.y).find(a=>{const body=a.dog?58:Math.max(124,(a.stature||102)+40);const half=a.dog?30:Math.max(48,38/this.scale);return Math.abs(a.x-p.x)<half&&p.y<a.y+28&&p.y>a.y-body;})||null;}
+ pickActor(p){const actors=[...this.actors,...this.partyActors().filter(a=>!a.held),...(this.enemy?[this.enemy]:[])];return actors.sort((a,b)=>b.y-a.y).find(a=>{const body=a.dog?58:Math.max(124,(a.stature||102)+40);const half=a.dog?30:Math.max(48,38/this.scale);return Math.abs(a.x-p.x)<half&&p.y<a.y+28&&p.y>a.y-body;})||null;}
  click(p){
  if(this.state.combat){const actor=this.pickActor(p);if(actor===this.enemy)this.callbacks.enemy();else if(actor?.party)this.callbacks.interact(actor);return;}
  if(this.paused){this.callbacks.message('The world is paused. Press Space or the pause button to resume.');return;}
@@ -181,7 +190,7 @@ export class IsometricWorld {
  setStatus(text){const el=this.root.querySelector('.world-status');if(el){el.textContent=text;el.hidden=!text;}}
  completeApproach(){if(!this.target)return;const {actor,callback}=this.target;const end=this.player.path.at(-1);if(end){this.player.x=end.x;this.player.y=end.y;}this.player.path=[];this.target=null;this.destination=null;this.setStatus('');this.faceEachOther(this.player,actor);if(distance(this.player,actor)<=115){if(callback)callback();else this.callbacks.interact(actor);}}
  setVisible(visible){this.visible=visible;if(visible)this.wake();else{this.stop();this.finishCombat();if(!this.destroyed)this.completeApproach();}}
- interactNearest(){if(this.state.combat){this.callbacks.enemy();return;}const near=[...this.actors,...this.partyActors()].sort((a,b)=>distance(this.player,a)-distance(this.player,b))[0];if(near)this.approach(near);}
+ interactNearest(){if(this.state.combat){this.callbacks.enemy();return;}const near=[...this.actors,...this.partyActors().filter(a=>!a.held)].sort((a,b)=>distance(this.player,a)-distance(this.player,b))[0];if(near)this.approach(near);}
  faceEachOther(a,b){const dx=b.x-a.x,dy=b.y-a.y;a.direction=dy>=0?(dx>=0?0:1):(dx<0?2:3);b.direction=(a.direction+2)%4;}
  stop(){if(this.raf)cancelAnimationFrame(this.raf);this.raf=0;this.last=0;}
  wake(){if(this.destroyed||!this.ready||!this.visible||this.suspended||this.paused||this.raf)return;this.last=0;this.raf=requestAnimationFrame(t=>this.frame(t));}
@@ -201,10 +210,92 @@ export class IsometricWorld {
  for(const a of this.actors){if(a===this.target?.actor||this.social&&(a===this.social.a||a===this.social.b))continue;a.wait-=dt;if(a.route&&!a.path.length&&a.wait<=0){const p=a.route[a.routeIndex++%a.route.length];let dest={x:p[0],y:p[1]};for(let tries=0;tries<6;tries++){const occupied=this.actors.some(o=>o!==a&&Math.hypot((o.path?.at(-1)?.x??o.x)-dest.x,(o.path?.at(-1)?.y??o.y)-dest.y)<48);if(!occupied)break;const ang=tries*1.15,r=50+tries*12,nx=p[0]+Math.cos(ang)*r,ny=p[1]+Math.sin(ang)*r;if(isWalkable(this.grid,nx,ny))dest={x:nx,y:ny};}a.path=findPath(this.grid,a,dest,70)||[];a.wait=2.4+((a.routeIndex*5+(a.name||'').length+(a.sprite||0))%8)*.85;}this.advanceActor(a,dt);resolveSeparation(a,[this.player,...this.actors],this.grid,38);}
  if(this.time%1<dt)separateCrowd(this.actors,this.grid,42);
  }
- if(this.companion)this.updateFollower(this.companion,this.player,dt,70,-1);
+ if(this.companion)this.updateFollower(this.companion,this.player,dt,this.companion.person==='berkay'?86:70,-1);
+ if(this.companion&&this.dog)this.updateBerkayQuirks(dt);
  if(this.dog)this.updateFollower(this.dog,this.player,dt,48,1);
  this.stepLivingWorld(dt);
  if(this.follow&&!this.drag){const targetX=this.player.x,targetY=this.player.y-85,dx=targetX-this.camera.x,dy=targetY-this.camera.y;const deadX=Math.max(48,(this.width/this.scale)*0.20),deadY=Math.max(36,(this.height/this.scale)*0.16);let mx=0,my=0;if(Math.abs(dx)>deadX)mx=dx-Math.sign(dx)*deadX;if(Math.abs(dy)>deadY)my=dy-Math.sign(dy)*deadY;if(mx||my){this.camera.x+=mx*Math.min(1,dt*4);this.camera.y+=my*Math.min(1,dt*4);this.clampCamera();this.cameraDirty=true;}}
+ }
+ // v5.0.9b: Berkay's two quirks. (1) Personal space: when Uygar steps within ~62 units of a planted Berkay he raises a
+ // palm ("hold up"), then takes one small step back; 12 s cooldown. (2) Every ~20-35 s of a calm, idle party with Pukie
+ // close by, Berkay picks Pukie up, hugs him for ~2 s and sets him down beside his boots. Only one Pukie is ever drawn
+ // (the ground dog is hidden while held) and the hug cancels the instant Uygar moves, interacts or anything starts.
+ updateBerkayQuirks(dt){
+  const b=this.companion,dog=this.dog,p=this.player;if(!b||b.person!=='berkay'||!dog)return;
+  const q=this.quirk;
+  const busy=!!(this.target||this.state.combat||this.combatFx||this.reduced||b.waiting||b.sheltered||dog.waiting);
+  const playerMoving=!!(p.path?.length||this.keys.size||p.holdVelocity||!p.planted||(p.velocity||0)>=8);
+  const bPlanted=!b.path?.length&&(b.planted||!b.moving)&&(b.velocity||0)<8;
+  this.holdupCd=Math.max(0,(this.holdupCd??3)-dt);
+  if(q){
+   q.t+=dt;
+   if(q.kind==='hug'){
+    const cancel=busy||playerMoving||q.t>12;
+    if(cancel){this.endHug(true);return;}
+    if(q.stage==='approach'){
+     if(!b.path?.length){q.stage='lift';q.t=0;b.path=[];b.velocity=0;b.moving=false;b.planted=true;
+      const idle=ensureIdle(b);idle.mode='quirk';idle.glanceDir=null;idle.special=null;idle.shift=0;}
+     else if(q.t>4){this.endHug(true);}
+     return;
+    }
+    const idle=ensureIdle(b);
+    if(q.stage==='lift'){if(q.t>=.28){q.stage='hold';q.t=0;dog.held=true;dog.path=[];idle.special=gestureFrame(b.atlas,'hug');idle.specialMirror=false;if(idle.special==null){this.endHug(true);}}return;}
+    if(q.stage==='hold'){if(q.t>=q.hold){this.endHug(false);}return;}
+    return;
+   }
+   if(q.kind==='holdup'){
+    const idle=ensureIdle(b);
+    if(busy){this.endQuirk();return;}
+    if(q.stage==='palm'&&q.t>=1.5){
+     idle.special=null;idle.mode='stand';idle.t=0;q.stage='step';q.t=0;
+     const away=Math.hypot(b.x-p.x,b.y-p.y)||1,nx=b.x+(b.x-p.x)/away*14,ny=b.y+(b.y-p.y)/away*14;
+     if(isWalkable(this.grid,nx,ny))b.path=[{x:nx,y:ny}];
+    }
+    if(q.stage==='step'&&(!b.path?.length||q.t>1.2)){this.endQuirk();}
+    return;
+   }
+  }
+  if(busy)return;
+  // (1) personal space
+  const close=Math.hypot(p.x-b.x,p.y-b.y),approaching=this.prevGap!=null&&close<this.prevGap-.05;this.prevGap=close;
+  // only when Uygar actually walks up to him (closing in), not while the two simply stand near each other
+  if(bPlanted&&close<62&&approaching&&this.holdupCd<=0&&!dog.held){
+   const frame=gestureFrame(b.atlas,'holdup');
+   const idle=ensureIdle(b);
+   this.quirk={kind:'holdup',stage:'palm',t:0};this.holdupCd=12+Math.random()*3;
+   idle.mode='quirk';idle.glanceDir=null;idle.shift=0;idle.t=0;
+   if(frame!=null){idle.special=frame;idle.specialMirror=p.x<b.x;}
+   else{idle.special=null;idle.glanceDir=facingFrom(p.x-b.x,p.y-b.y,b.direction);}
+   b.direction=facingFrom(p.x-b.x,p.y-b.y,b.direction);
+   b.bubble={text:'Hold up — personal space.',until:this.time+1.6};
+   return;
+  }
+  // (2) Pukie hug
+  const dogIdle=ensureIdle(dog);
+  const calm=!playerMoving&&bPlanted&&!dog.path?.length&&(dog.planted||!dog.moving)&&!dogIdle.roam;
+  if(this.hugTimer==null)this.hugTimer=20+Math.random()*15;
+  if(!calm){this.hugTimer=Math.max(this.hugTimer,4);return;}
+  this.hugTimer-=dt;
+  if(this.hugTimer>0)return;
+  this.hugTimer=20+Math.random()*15;
+  const dd=Math.hypot(dog.x-b.x,dog.y-b.y);if(dd>120)return;
+  const q2={kind:'hug',stage:'approach',t:0,hold:1.8+Math.random()*.7,dogHome:{x:dog.x,y:dog.y}};this.quirk=q2;
+  b.direction=facingFrom(dog.x-b.x,dog.y-b.y,b.direction);
+  if(dd>30){const ux=(b.x-dog.x)/dd,uy=(b.y-dog.y)/dd,tx=dog.x+ux*22,ty=dog.y+uy*22;b.path=isWalkable(this.grid,tx,ty)?[{x:tx,y:ty}]:[];}
+  else b.path=[];
+ }
+ endQuirk(){const b=this.companion;if(b?.idle){b.idle.mode='stand';b.idle.special=null;b.idle.specialMirror=false;b.idle.t=0;b.idle.next=3+Math.random()*3;}this.quirk=null;}
+ endHug(cancelled){
+  const b=this.companion,dog=this.dog;const q=this.quirk;
+  if(dog?.held){
+   // set Pukie down on four paws beside Berkay's boots (or back where he was)
+   const side=b.x<=this.player.x?-1:1;const spots=[{x:b.x+side*20,y:b.y+8},{x:b.x-side*20,y:b.y+8},{x:b.x,y:b.y+18},q?.dogHome].filter(Boolean);
+   const spot=spots.find(s=>isWalkable(this.grid,s.x,s.y))||{x:dog.x,y:dog.y};
+   dog.x=spot.x;dog.y=spot.y;dog.held=false;dog.path=[];dog.velocity=0;dog.moving=false;dog.planted=true;dog.direction=b.direction;
+   const di=ensureIdle(dog);di.mode=cancelled?'stand':'wag';di.t=0;di.roam=null;di.col=cancelled?0:1;
+  }
+  if(b&&!cancelled&&!b.path?.length)b.bubble={text:'Good girl, Pukie.',until:this.time+1.4};
+  this.endQuirk();
  }
  updateDogRoam(dog,leader,dt){
   if(this.reduced)return false;
@@ -299,7 +390,7 @@ export class IsometricWorld {
  if(this.destination){const p=this.destination;ctx.strokeStyle='#edd693';ctx.lineWidth=1.2/this.scale;ctx.beginPath();ctx.ellipse(p.x,p.y,18,9,0,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(p.x-24,p.y);ctx.lineTo(p.x-11,p.y);ctx.moveTo(p.x+11,p.y);ctx.lineTo(p.x+24,p.y);ctx.stroke();}
  this.drawDust();
  const drawables=[...this.actors,this.player,...this.partyActors(),...(this.enemy?[this.enemy]:[]),...(this.occluderSprites||[])].sort((a,b)=>a.y-b.y);
- for(const actor of drawables){if(actor.occluder){if(actor.canvas)ctx.drawImage(actor.canvas,actor.ox,actor.oy);else{ctx.save();polygon(ctx,actor.polygon);ctx.clip();ctx.drawImage(this.background,0,0,WORLD_W,WORLD_H);ctx.restore();}}else this.drawActor(actor);}
+ for(const actor of drawables){if(actor.occluder){if(actor.canvas)ctx.drawImage(actor.canvas,actor.ox,actor.oy,actor.ow||actor.canvas.width,actor.oh||actor.canvas.height);else{ctx.save();polygon(ctx,actor.polygon);ctx.clip();ctx.drawImage(this.background,0,0,WORLD_W,WORLD_H);ctx.restore();}}else this.drawActor(actor);}
  this.drawWeather();this.drawMotes();
  for(const a of [this.player,...this.actors,...this.partyActors(),...(this.enemy?[this.enemy]:[])]){if(a.bubble?.until>this.time)this.drawBubble(a,a.bubble.text);}
  this.layoutLabels();
@@ -327,9 +418,11 @@ export class IsometricWorld {
  this.occluderSprites=(this.scene.occluders||[]).map(o=>{
   const xs=o.polygon.map(p=>p[0]),ys=o.polygon.map(p=>p[1]);
   const pad=2,x0=Math.floor(Math.min(...xs))-pad,y0=Math.floor(Math.min(...ys))-pad,x1=Math.ceil(Math.max(...xs))+pad,y1=Math.ceil(Math.max(...ys))+pad;
-  const c=document.createElement('canvas');c.width=Math.max(1,x1-x0);c.height=Math.max(1,y1-y0);
-  const g=c.getContext('2d');g.translate(-x0,-y0);polygon(g,o.polygon);g.clip();g.drawImage(this.background,0,0,WORLD_W,WORLD_H);
-  return {occluder:true,y:o.depth,canvas:c,ox:x0,oy:y0};
+  // v5.0.9b: bake at the background's native resolution (maps are now 2x) so foreground occluders stay crisp when zoomed.
+  const k=Math.max(1,Math.min(2,(this.background.naturalWidth||WORLD_W)/WORLD_W));
+  const c=document.createElement('canvas');c.width=Math.max(1,Math.round((x1-x0)*k));c.height=Math.max(1,Math.round((y1-y0)*k));
+  const g=c.getContext('2d');g.scale(k,k);g.translate(-x0,-y0);polygon(g,o.polygon);g.clip();g.drawImage(this.background,0,0,WORLD_W,WORLD_H);
+  return {occluder:true,y:o.depth,canvas:c,ox:x0,oy:y0,ow:x1-x0,oh:y1-y0};
  });
  }
  bakeMinimapGround(){
@@ -372,6 +465,7 @@ export class IsometricWorld {
   for(const m of this.motes){const a=.08+.1*(.5+.5*Math.sin(m.ph));ctx.fillStyle='rgba(230,220,180,'+a.toFixed(3)+')';ctx.beginPath();ctx.arc(m.x,m.y,m.s,0,Math.PI*2);ctx.fill();}
  }
  drawGroundShadow(a){
+ if(a.held)return;
  const ctx=this.ctx,dog=!!a.dog,rx=dog?9:13,ry=dog?3.1:4.2;
  const gait=gaitPose(a,this.reduced);
  const pulse=a.moving&&!gait.planted?1-0.12*Math.abs(Math.sin(gait.cycle*4*Math.PI)):1;
@@ -399,6 +493,7 @@ export class IsometricWorld {
  ctx.restore();
  }
  drawActor(a){
+ if(a.held)return;
  const ctx=this.ctx,pos=this.screenPoint(a);if(pos.x< -100||pos.x>this.width+100||pos.y< -120||pos.y>this.height+140)return;
  this.drawGroundShadow(a);
  if(a===this.hover||a===this.target?.actor||(a.enemy&&this.state.combat))this.drawSelectionMark(a);
@@ -410,18 +505,24 @@ export class IsometricWorld {
  const face=(gait.planted&&a.idle?.glanceDir!=null)?a.idle.glanceDir:a.direction;
  const directional=a.hero||a.party,row=directional?face:(a.sprite??0);
  const meta=this.meta[atlas]||this.meta[equipmentAtlas(this.state,this.state.lead)];
- const rect=meta.frames[row*4+gait.frame];
+ const special=useIdle&&gait.special!=null&&meta.frames[gait.special]?gait.special:null;
+ const rect=special!=null?meta.frames[special]:meta.frames[row*4+gait.frame];
  const drawH=a.dog?40:a.hero||a.party?102:a.enemy?107:(a.stature||99),pose=spritePose(rect,drawH);
- const mirror=!directional&&(face===0||face===3);let ox=0,oy=0;
+ const mirror=special!=null?!!gait.mirror:!directional&&(face===0||face===3);let ox=0,oy=0;
  if(this.combatFx){const f=this.combatFx;if(a.hero&&f.id==='attack'&&f.age<.38)ox=Math.sin(f.age/.38*Math.PI)*9;if(a.enemy&&f.id==='attack'&&f.age>.17&&f.age<.5&&f.hit>0)ox=Math.sin(f.age*40)*4;}
- const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+1.2;
+ const b=rect.bounds||{x:0,y:0,w:rect.w,h:rect.h},footShift=(rect.footPad||0)*pose.height/b.h+(a.dog?1.4:2.2); // v5.0.9b: soles sit inside the contact shadow, not on its rim
  ctx.save();
  // v5.0.9: feet stay on the ground line (no rotation, no planted bounce); breathing only lifts the torso above the hip.
  const bob=gait.planted?0:-(gait.lift||0),sway=gait.sway||0;ctx.translate(a.x+ox+sway,a.y+oy+footShift+bob);if(mirror)ctx.scale(-1,1);if(a.filter)ctx.filter=a.filter;
  let rigged=false;
  if(rigged){try{this.drawRig(a,pose,gait,meta,row,frame);}catch{rigged=false;}}
- if(!rigged){const source=pose.source,img=this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),breath=gait.planted?(gait.breath||1):1;
-  if(breath===1)ctx.drawImage(img,source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);
+ if(!rigged){const source=pose.source,img=this.atlases[atlas]||(a.hero?this.hero:atlas==='npc-workers'?this.workers:this.npcs),breath=gait.planted?(gait.breath||1):1,shift=gait.planted?(gait.shift||0):0;
+  if(shift){ // v5.0.9b weight shift: legs drawn untouched, torso sheared sideways in thin strips (0 at the hip, max at the crown)
+   const sc=pose.height/source.h,hipSrc=Math.round(source.h*.56),lowH=source.h-hipSrc,hipY=-lowH*sc,amp=shift*1.6*(mirror?-1:1),N=10;
+   ctx.drawImage(img,source.x,source.y+hipSrc,source.w,lowH,-pose.width/2,hipY,pose.width,lowH*sc);
+   for(let i=0;i<N;i++){const y0=Math.floor(hipSrc*i/N),y1=Math.floor(hipSrc*(i+1)/N),k=1-(i+.5)/N;ctx.drawImage(img,source.x,source.y+y0,source.w,y1-y0+(i<N-1?1:0),-pose.width/2+amp*k,hipY-(hipSrc-y0)*sc*breath,pose.width,(y1-y0+(i<N-1?1:0))*sc*breath);}
+  }
+  else if(breath===1)ctx.drawImage(img,source.x,source.y,source.w,source.h,-pose.width/2,-pose.height,pose.width,pose.height);
   else{const sc=pose.height/source.h,hipSrc=Math.round(source.h*.56),lowH=source.h-hipSrc,hipY=-lowH*sc;
    ctx.drawImage(img,source.x,source.y+hipSrc,source.w,lowH,-pose.width/2,hipY,pose.width,lowH*sc);
    ctx.save();ctx.translate(0,hipY);ctx.scale(1,breath);ctx.drawImage(img,source.x,source.y,source.w,hipSrc+1,-pose.width/2,-hipSrc*sc,pose.width,(hipSrc+1)*sc);ctx.restore();}}
@@ -559,7 +660,7 @@ export class IsometricWorld {
  if(line)lines.push(line);lines=lines.slice(0,3);
  const w=Math.min(maxW,Math.max(...lines.map(s=>ctx.measureText(s).width))+14);
  const h=8+lines.length*13;
- let x=clamp(p.x-w/2,8,this.width-w-8),y=clamp(p.y-(a.dog?36:72)*this.scale-h-8,44,this.height-h-64);
+ let x=clamp(p.x-w/2,8,this.width-w-8),y=clamp(p.y-(a.dog?36:Math.max(72,(a.stature||99)+6))*this.scale-h-8,44,this.height-h-64);
  if(y>this.height-64){ctx.restore();return;}
  ctx.fillStyle='rgba(238,224,181,.82)';rounded(ctx,x,y,w,h,4);ctx.fill();
  ctx.beginPath();ctx.moveTo(clamp(p.x,x+6,x+w-6)-5,y+h);ctx.lineTo(clamp(p.x,x+6,x+w-6),y+h+6);ctx.lineTo(clamp(p.x,x+6,x+w-6)+5,y+h);ctx.fill();

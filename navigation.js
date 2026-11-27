@@ -58,7 +58,7 @@ export function stepActor(actor,dt){
   actor.velocity=velocity+Math.sign(target-velocity)*Math.min(Math.abs(target-velocity),accel*elapsed);
   speed=actor.velocity;
  }
- const stride=actor.dog?10:13; // v5.0.9: 52 world units per 4-frame step cycle at 102px stature (was 72 -> feet skated)
+ const stride=actor.dog?10:(actor.hero||actor.party)?16:13; // v5.0.9b: brothers' sheets are true A(stride)/P(passing)/B(opposite stride)/P cycles = 2 steps per 64 units; NPC sheets keep 52
  let budget=speed*elapsed,moved=0;
  while(budget>0&&actor.path?.length){
   const target=actor.path[0],dx=target.x-actor.x,dy=target.y-actor.y,d=Math.hypot(dx,dy);

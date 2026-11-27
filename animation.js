@@ -12,10 +12,20 @@ export function idleAtlasFor(walkAtlas){
   'berkay-rain-hat-walk':'berkay-rain-hat-idle',
   // berkay-rain-hat-glasses-walk is byte-identical to berkay-hat-glasses-walk, so it shares that standing sheet.
   'berkay-rain-hat-glasses-walk':'berkay-hat-glasses-idle',
-  'berkay-rain-hood-walk':'berkay-rain-hood-idle'
+  'berkay-rain-hood-walk':'berkay-rain-hood-idle',
+  // v5.0.9b: town NPCs have dedicated two-feet-down standing sheets (one cell per row, all columns share it).
+  'npc-walk':'npc-idle',
+  'npc-workers':'npc-workers-idle'
  };
  return map[walkAtlas]||null;
 }
+// v5.0.9b: extra pixel-locked gesture cells appended as row 4 of the brothers' standing sheets.
+const GESTURES={
+ 'uygar-idle':{satchel:16},'uygar-rain-idle':{satchel:16},
+ 'berkay-idle':{holdup:16,hug:17},'berkay-hat-idle':{holdup:16,hug:17},'berkay-hat-glasses-idle':{holdup:16,hug:17},
+ 'berkay-rain-idle':{holdup:16,hug:17},'berkay-rain-hat-idle':{holdup:16,hug:17},'berkay-rain-hood-idle':{holdup:16,hug:17}
+};
+export function gestureFrame(walkAtlas,name){const idle=idleAtlasFor(walkAtlas);return idle&&GESTURES[idle]?GESTURES[idle][name]??null:null;}
 export function idleSeed(actor){
  const s=String(actor.id||actor.name||'x')+','+String(actor.person||actor.sprite||'');
  let h=2166136261;
@@ -31,7 +41,7 @@ export function ensureIdle(actor){
 }
 export function resetIdle(actor){
  const idle=ensureIdle(actor);
- idle.col=0;idle.mode='stand';idle.t=0;idle.glanceDir=null;idle.plantedFor=0;idle.bounce=0;idle.bob=0;idle.perkT=0;
+ idle.col=0;idle.mode='stand';idle.t=0;idle.glanceDir=null;idle.plantedFor=0;idle.bounce=0;idle.bob=0;idle.perkT=0;idle.special=null;idle.specialMirror=false;idle.shift=0;
  idle.next=2+(idle.seed||0)*2;idle.nextWag=1.2+(idle.seed||0)*1.2;idle.nextSniff=2.8+(idle.seed||0)*2.2;idle.nextRoam=10+(idle.seed||0)*5;
  if(idle.roam)idle.roam=null;
 }
@@ -46,9 +56,11 @@ export function stepIdle(actor,dt,opts={}){
  idle.clock=(idle.clock||0)+dt;
  idle.bounce=0;idle.bob=0;idle.shimmy=0;
  if(!planted){resetIdle(actor);return idle;}
+ // v5.0.9b: world-driven quirks (Berkay's hold-up / hug) own the pose while they run.
+ if(idle.mode==='quirk'){idle.plantedFor+=dt;return idle;}
  idle.plantedFor+=dt;
  idle.t+=dt;
- if(reduced){idle.col=idleAtlasFor(actor.atlas)?0:NPC_STAND_COL;idle.mode='stand';idle.glanceDir=null;return idle;}
+ if(reduced){idle.col=idleAtlasFor(actor.atlas)?0:NPC_STAND_COL;idle.mode='stand';idle.glanceDir=null;idle.special=null;idle.shift=0;return idle;}
  if(actor.dog)return stepDogIdle(actor,dt,opts,idle);
  if(actor.hero||actor.party)return stepHumanIdle(actor,dt,idle,!!idleAtlasFor(actor.atlas));
  return stepNpcIdle(actor,dt,idle);
@@ -63,16 +75,21 @@ function stepHumanIdle(actor,dt,idle,hasSheet){
   }else if(idle.t>=idle.next){idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=cadence();}
   return idle;
  }
- // v5.0.9: every column of a standing sheet is the same two-feet-down pose; idle life is breathing plus an occasional glance.
+ // v5.0.9b: calm random idle life every ~3-7 s, feet never move: turn left/right (row switch), a torso-only weight shift,
+ // or a pixel-locked hand gesture (Uygar's satchel strap). Breathing runs underneath all of them.
  idle.col=0;
+ const satchel=gestureFrame(actor.atlas,'satchel');
  if(idle.mode==='stand'){
-  idle.glanceDir=null;
+  idle.glanceDir=null;idle.special=null;idle.shift=0;
   if(idle.t>=idle.next){
-   idle.mode='glance';idle.t=0;idle.next=hold();
-   const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;
+   idle.t=0;const roll=Math.random();
+   if(satchel!=null&&roll<.3){idle.mode='gesture';idle.next=1.6+Math.random()*.8;idle.special=satchel;idle.specialMirror=false;}
+   else if(roll<.62){idle.mode='shift';idle.next=2.2+Math.random()*.8;idle.shiftDir=Math.random()<.5?-1:1;}
+   else{idle.mode='glance';idle.next=hold();const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;}
   }
- }else if(idle.t>=idle.next){
-  idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=cadence()+2.5;
+ }else{
+  if(idle.mode==='shift'){const p=Math.min(1,idle.t/idle.next);idle.shift=Math.sin(p*Math.PI)*(idle.shiftDir||1);}
+  if(idle.t>=idle.next){idle.mode='stand';idle.glanceDir=null;idle.special=null;idle.shift=0;idle.t=0;idle.next=3+Math.random()*4;}
  }
  return idle;
 }
@@ -87,27 +104,28 @@ function stepNpcIdle(actor,dt,idle){
  return idle;
 }
 function stepDogIdle(actor,dt,opts,idle){
- // v5.0.9: Pukie always stands on four paws while planted. No vertical bounce/bob (it read as tilting/popping);
- // a wag is a tiny sideways shimmy of the whole dog, sniffing just holds still.
+ // v5.0.9b: Pukie never moves as a whole while planted. A wag flips between two tail-only cells (paws pixel-identical),
+ // a sniff holds the head-dip cell. No shimmy, no bounce.
  const roam=idle.roam;
- idle.col=0;
+ idle.col=0;idle.shimmy=0;
  if(roam&&(roam.stage==='go'||roam.stage==='back'))return idle;
- const wag=t=>{const hz=4.5;idle.shimmy=Math.sin(t*hz*2*Math.PI)*.35;};
- if(roam&&(roam.stage==='sniff'||roam.stage==='wag')){if(roam.stage==='wag')wag(idle.t);return idle;}
+ const wag=t=>{idle.col=1+(Math.floor(t*9)%2);};
+ if(roam&&(roam.stage==='sniff'||roam.stage==='wag')){if(roam.stage==='wag')wag(idle.t);else idle.col=3;return idle;}
  if(idle.mode==='wag'){
   wag(idle.t);
-  if(idle.t>=1.5){idle.mode='stand';idle.t=0;idle.shimmy=0;idle.nextWag=2+Math.random()*2;}
+  if(idle.t>=1.5){idle.mode='stand';idle.t=0;idle.col=0;idle.nextWag=3+Math.random()*4;}
   return idle;
  }
  if(idle.mode==='sniff'){
-  if(idle.t>=idle.next){idle.mode='stand';idle.t=0;idle.nextSniff=4+Math.random()*3.5;}
+  idle.col=3;
+  if(idle.t>=idle.next){idle.mode='stand';idle.t=0;idle.col=0;idle.nextSniff=4+Math.random()*3.5;}
   return idle;
  }
  if(idle.mode==='sit'){idle.mode='stand';idle.t=0;}
  idle.nextWag=(idle.nextWag??2.5)-dt;
  idle.nextSniff=(idle.nextSniff??5)-dt;
- if(idle.nextWag<=0){idle.mode='wag';idle.t=0;return idle;}
- if(idle.nextSniff<=0){idle.mode='sniff';idle.t=0;idle.next=2.4+Math.random()*.8;return idle;}
+ if(idle.nextWag<=0){idle.mode='wag';idle.t=0;wag(0);return idle;}
+ if(idle.nextSniff<=0){idle.mode='sniff';idle.t=0;idle.col=3;idle.next=1.6+Math.random()*1.2;return idle;}
  return idle;
 }
 export function gaitPose(actor,reduced=false){
@@ -118,7 +136,7 @@ export function gaitPose(actor,reduced=false){
  if(planted){
   const hasSheet=!!idleAtlasFor(actor.atlas);
   const frame=hasSheet?(idle?.col??0):(idle?.col??NPC_STAND_COL);
-  return {frame,cycle,lift:0,sway:reduced?0:(idle?.shimmy||0),lean:0,planted:true,idle:true,bounce:0,bob:0,breath:(reduced||actor.dog)?1:breathScale(idle?.clock||0,idle?.seed||0)};
+  return {frame,cycle,lift:0,sway:0,lean:0,planted:true,idle:true,bounce:0,bob:0,special:idle?.special??null,mirror:!!idle?.specialMirror,shift:reduced?0:(idle?.shift||0),breath:(reduced||actor.dog)?1:breathScale(idle?.clock||0,idle?.seed||0)};
  }
  // v5.0.9: no body rotation while walking (it tilted the whole sprite incl. feet, so planted feet skated);
  // a small vertical lift at the passing position and a gentle lateral weight shift remain.
