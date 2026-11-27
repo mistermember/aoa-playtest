@@ -73,9 +73,21 @@ export class IsometricWorld {
  actor.followWait-=dt;
  const point=this.trailPoint(gap,leader,side);
  const behind=distance(actor,point);
- actor.speed=Math.min(actor.baseSpeed*1.35,Math.max(actor.baseSpeed*.55,(leader.velocity||leader.speed||110)+(behind-18)*1.1));
- const settle=leader.planted?46:16;
- if(behind>22&&actor.followWait<=0&&!(leader.planted&&behind<settle)){
+ const leaderV=leader.velocity||0;
+ const settle=leader.planted?90:16;
+ if(leader.planted&&behind<settle){
+  actor.path=[];
+  actor.velocity=0;
+  actor.moving=false;
+  actor.planted=true;
+  actor.speed=actor.baseSpeed;
+  this.advanceActor(actor,dt);
+  resolveSeparation(actor,[this.player,...this.actors,...this.partyActors().filter(a=>a!==actor)],this.grid,actor.dog?22:28);
+  return;
+ }
+ actor.speed=Math.min(actor.baseSpeed*1.35,Math.max(actor.baseSpeed*.55,leaderV+(behind-18)*1.1));
+ if(leader.planted)actor.speed=Math.min(actor.speed,actor.baseSpeed*.7);
+ if(behind>22&&actor.followWait<=0){
   const blockers=[this.player,...this.partyActors().filter(a=>a!==actor)];
   const blocked=blockActors(this.grid,blockers,actor,actor.dog?22:26);
   actor.path=approachPoint(blocked,actor,point,8)||findPath(blocked,actor,point,70)||approachPoint(this.grid,actor,point,8)||findPath(this.grid,actor,point,70)||[];

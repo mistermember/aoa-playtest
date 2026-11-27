@@ -1,11 +1,19 @@
 // Pose calculations use travelled distance, never wall-clock animation timers.
 export function idleAtlasFor(walkAtlas){
  if(!walkAtlas)return null;
- if(walkAtlas==='pukie-walk')return 'pukie-idle';
- if(walkAtlas==='uygar-walk')return 'uygar-idle';
- if(walkAtlas==='berkay-walk')return 'berkay-idle';
- if(walkAtlas==='berkay-hat-walk'||walkAtlas==='berkay-hat-glasses-walk')return 'berkay-hat-idle';
- return null;
+ const map={
+  'pukie-walk':'pukie-idle',
+  'uygar-walk':'uygar-idle',
+  'uygar-rain-walk':'uygar-rain-idle',
+  'berkay-walk':'berkay-idle',
+  'berkay-hat-walk':'berkay-hat-idle',
+  'berkay-hat-glasses-walk':'berkay-hat-glasses-idle',
+  'berkay-rain-walk':'berkay-rain-idle',
+  'berkay-rain-hat-walk':'berkay-rain-hat-idle',
+  'berkay-rain-hat-glasses-walk':'berkay-hat-glasses-idle',
+  'berkay-rain-hood-walk':'berkay-rain-hood-idle'
+ };
+ return map[walkAtlas]||null;
 }
 export function idleSeed(actor){
  const s=String(actor.id||actor.name||'x')+','+String(actor.person||actor.sprite||'');
