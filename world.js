@@ -1,8 +1,8 @@
-import {gaitPose,spritePose,boneAffine,kneeFor,footTargets,idleAtlasFor,ensureIdle,stepIdle,gestureFrame} from './animation.js?v=5.0.9d';
+import {gaitPose,spritePose,boneAffine,kneeFor,footTargets,idleAtlasFor,ensureIdle,stepIdle,gestureFrame} from './animation.js?v=5.0.9e';
 import {weatherAt,regionalWeather,hoodRaised} from './weather.js';
 import {equipmentAtlas} from './equipment.js';
 import {readPreferences,savePreference} from './preferences.js';
-import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,coastTarget,resolveSeparation,separateCrowd,blockActors,facingFrom} from './navigation.js?v=5.0.9d';
+import {WORLD_W,WORLD_H,distance,buildGrid,isWalkable,nearestCell,cellCenter,findPath,approachPoint,stepActor,coastTarget,resolveSeparation,separateCrowd,blockActors,facingFrom} from './navigation.js?v=5.0.9e';
 import {SCENES,sceneId,combatSceneId,combatStaging,makeActors} from './world-data.js';
 
 const imageCache=new Map(),memories=new Map();
@@ -11,8 +11,8 @@ export function resetWorldMemory(){memories.clear();}
 // v5.0.9d: map backgrounds are 3072x2048 now; keep only the two most recent decoded maps alive (low-RAM phones).
 const recentMaps=[];
 function rememberMap(name){if(!/-map$/.test(name))return;const i=recentMaps.indexOf(name);if(i>=0)recentMaps.splice(i,1);recentMaps.push(name);while(recentMaps.length>2)imageCache.delete(recentMaps.shift());}
-function loadImage(name){rememberMap(name);if(!imageCache.has(name)){imageCache.set(name,new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>{imageCache.delete(name);reject(new Error(`Could not load ${name}`));};i.src=`assets/${name}.webp?v=5.0.9d`;}));}return imageCache.get(name);}
-function loadMetadata(){return metadataPromise??=fetch('assets/sprite-frames.json?v=5.0.9d').then(r=>{if(!r.ok)throw Error('Sprite data unavailable');return r.json();}).catch(e=>{metadataPromise=null;throw e;});}
+function loadImage(name){rememberMap(name);if(!imageCache.has(name)){imageCache.set(name,new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>{imageCache.delete(name);reject(new Error(`Could not load ${name}`));};i.src=`assets/${name}.webp?v=5.0.9e`;}));}return imageCache.get(name);}
+function loadMetadata(){return metadataPromise??=fetch('assets/sprite-frames.json?v=5.0.9e').then(r=>{if(!r.ok)throw Error('Sprite data unavailable');return r.json();}).catch(e=>{metadataPromise=null;throw e;});}
 function annotateFootPads(meta,atlases){
  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
  for(const [name,image] of Object.entries(atlases)){
