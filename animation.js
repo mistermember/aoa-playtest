@@ -1,14 +1,126 @@
 // Pose calculations use travelled distance, never wall-clock animation timers.
+export function idleAtlasFor(walkAtlas){
+ if(!walkAtlas)return null;
+ if(walkAtlas==='pukie-walk')return 'pukie-idle';
+ if(walkAtlas==='uygar-walk')return 'uygar-idle';
+ if(walkAtlas==='berkay-walk')return 'berkay-idle';
+ if(walkAtlas==='berkay-hat-walk'||walkAtlas==='berkay-hat-glasses-walk')return 'berkay-hat-idle';
+ return null;
+}
+export function idleSeed(actor){
+ const s=String(actor.id||actor.name||'x')+','+String(actor.person||actor.sprite||'');
+ let h=2166136261;
+ for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);
+ return (h>>>0)/4294967296;
+}
+export function ensureIdle(actor){
+ if(!actor.idle){
+  const seed=idleSeed(actor);
+  actor.idle={col:0,mode:'stand',t:0,next:4+seed*5,glanceDir:null,plantedFor:0,roam:null,seed,clock:seed*3.4,bounce:0,bob:0,nextWag:2.5+seed*2.5,nextSniff:5+seed*5,sitAfter:8+seed*4,nextRoam:14+seed*8,perkT:0};
+ }
+ return actor.idle;
+}
+export function resetIdle(actor){
+ const idle=ensureIdle(actor);
+ idle.col=0;idle.mode='stand';idle.t=0;idle.glanceDir=null;idle.plantedFor=0;idle.bounce=0;idle.bob=0;idle.perkT=0;
+ if(idle.roam)idle.roam=null;
+}
+export function breathScale(time,seed){
+ return 1+0.0075*Math.sin((time+(seed||0)*3.4)*2*Math.PI/3.4);
+}
+export function stepIdle(actor,dt,opts={}){
+ const reduced=!!opts.reduced;
+ const idle=ensureIdle(actor);
+ const planted=!!(actor.planted??(!actor.moving||(actor.velocity||0)<8));
+ idle.clock=(idle.clock||0)+dt;
+ idle.bounce=0;idle.bob=0;
+ if(!planted){resetIdle(actor);return idle;}
+ idle.plantedFor+=dt;
+ idle.t+=dt;
+ if(reduced){idle.col=idleAtlasFor(actor.atlas)?0:2;idle.mode='stand';idle.glanceDir=null;return idle;}
+ if(actor.dog)return stepDogIdle(actor,dt,opts,idle);
+ if(actor.hero||actor.party)return stepHumanIdle(actor,dt,idle,!!idleAtlasFor(actor.atlas));
+ return stepNpcIdle(actor,dt,idle);
+}
+function stepHumanIdle(actor,dt,idle,hasSheet){
+ if(!hasSheet){
+  idle.col=2;
+  if(idle.mode==='stand'){
+   idle.glanceDir=null;
+   if(idle.t>=idle.next){idle.mode='glance';idle.t=0;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=2+Math.random();}
+  }else if(idle.t>=idle.next){idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=4+Math.random()*5;}
+  return idle;
+ }
+ if(idle.mode==='stand'){
+  idle.col=0;idle.glanceDir=null;
+  if(idle.t>=idle.next){
+   const r=Math.random();
+   const act=r<.28?'look':r<.52?'gesture1':r<.76?'gesture2':'glance';
+   idle.mode=act;idle.t=0;
+   if(act==='look'){idle.col=1;idle.next=1.5+Math.random()*.7;}
+   else if(act==='gesture1'){idle.col=2;idle.next=1.4+Math.random()*.6;}
+   else if(act==='gesture2'){idle.col=3;idle.next=1.6+Math.random()*.8;}
+   else{idle.col=Math.random()<.5?0:1;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=2+Math.random();}
+  }
+ }else if(idle.t>=idle.next){
+  idle.mode='stand';idle.col=0;idle.glanceDir=null;idle.t=0;idle.next=4+Math.random()*5;
+ }
+ return idle;
+}
+function stepNpcIdle(actor,dt,idle){
+ idle.col=2;
+ if(idle.mode==='stand'){
+  idle.glanceDir=null;
+  if(idle.t>=idle.next){idle.mode='glance';idle.t=0;const dir=actor.direction||0;idle.glanceDir=Math.random()<.5?(dir+1)%4:(dir+3)%4;idle.next=1.6+Math.random()*1.2;}
+ }else if(idle.t>=idle.next){idle.mode='stand';idle.glanceDir=null;idle.t=0;idle.next=6+Math.random()*7;}
+ return idle;
+}
+function stepDogIdle(actor,dt,opts,idle){
+ const roam=idle.roam;
+ if(roam&&(roam.stage==='go'||roam.stage==='back'))return idle;
+ if(roam&&(roam.stage==='sniff'||roam.stage==='wag')){
+  if(roam.stage==='wag'){const hz=4.5;idle.col=Math.floor(idle.t*hz)%2;idle.bounce=Math.abs(Math.sin(idle.t*hz*Math.PI))*1.6;}
+  else{idle.col=2;idle.bob=Math.sin(idle.t*10)*1.1;}
+  return idle;
+ }
+ if(idle.mode==='wag'){
+  const hz=4.5;idle.col=Math.floor(idle.t*hz)%2;idle.bounce=Math.abs(Math.sin(idle.t*hz*Math.PI))*1.6;
+  if(idle.t>=1.4){idle.mode='stand';idle.col=0;idle.t=0;idle.bounce=0;idle.nextWag=2.5+Math.random()*2.5;}
+  return idle;
+ }
+ if(idle.mode==='sniff'){
+  idle.col=2;idle.bob=Math.sin(idle.t*10)*1.1;
+  if(idle.t>=idle.next){idle.mode='stand';idle.col=0;idle.t=0;idle.bob=0;idle.nextSniff=5+Math.random()*5;}
+  return idle;
+ }
+ if(idle.mode==='sit'){
+  idle.col=3;
+  if(idle.perkT>0){idle.perkT-=dt;idle.col=1;idle.bounce=.55;}
+  else if(Math.random()<dt*.12)idle.perkT=.35+Math.random()*.25;
+  return idle;
+ }
+ idle.col=0;
+ idle.nextWag=(idle.nextWag??2.5)-dt;
+ idle.nextSniff=(idle.nextSniff??5)-dt;
+ if(idle.nextWag<=0){idle.mode='wag';idle.t=0;return idle;}
+ if(idle.nextSniff<=0){idle.mode='sniff';idle.t=0;idle.next=2.2+Math.random();return idle;}
+ if(opts.nearLeader!==false&&idle.plantedFor>=(idle.sitAfter||10)){idle.mode='sit';idle.t=0;idle.col=3;}
+ return idle;
+}
 export function gaitPose(actor,reduced=false){
  const cycle=(((actor.phase||0)%4)+4)%4/4;
  const speed=actor.velocity||0;
  const planted=actor.planted??(!actor.moving||speed<8);
- const frame=planted?0:Math.floor(cycle*4)%4;
- if(planted||reduced)return {frame:0,cycle,lift:0,sway:0,lean:0,planted:true};
- const lift=Math.abs(Math.sin(cycle*2*Math.PI))*(actor.dog?.35:.85);
- const sway=Math.sin(cycle*2*Math.PI)*(actor.dog?.55:1.15);
- const lean=Math.sin(cycle*2*Math.PI)*(actor.dog?.7:1.35)*Math.PI/180;
- return {frame,cycle,lift,sway,lean,planted:false};
+ const idle=actor.idle;
+ if(planted){
+  const hasSheet=!!idleAtlasFor(actor.atlas);
+  const frame=hasSheet?(idle?.col??0):2;
+  return {frame,cycle,lift:0,sway:0,lean:0,planted:true,idle:true,bounce:idle?.bounce||0,bob:idle?.bob||0,breath:reduced?1:breathScale(idle?.clock||0,idle?.seed||0)};
+ }
+ const lift=reduced?0:Math.abs(Math.sin(cycle*2*Math.PI))*(actor.dog?.35:.85);
+ const sway=reduced?0:Math.sin(cycle*2*Math.PI)*(actor.dog?.55:1.15);
+ const lean=reduced?0:Math.sin(cycle*2*Math.PI)*(actor.dog?.7:1.35)*Math.PI/180;
+ return {frame:Math.floor(cycle*4)%4,cycle,lift,sway,lean,planted:false,bounce:0,bob:0,breath:1};
 }
 export function spritePose(frame,stature){
  const b=frame.bounds||{x:0,y:0,w:frame.w,h:frame.h},scale=stature/b.h;
